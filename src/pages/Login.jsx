@@ -15,6 +15,7 @@ export default function Login() {
     try {
       await signIn(email, password)
       console.log("logged in");
+      
     } catch (err) {
       setError('Invalid email or password')
     } finally {

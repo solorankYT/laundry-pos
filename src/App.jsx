@@ -4,7 +4,6 @@ import Login from './pages/login'
 import Orders from './pages/Orders'
 import Dashboard from './pages/Dashboard'
 
-// Blocks access if not logged in
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -12,7 +11,6 @@ function ProtectedRoute({ children }) {
   return children
 }
 
-// Blocks access if not manager
 function ManagerRoute({ children }) {
   const { user, role, loading } = useAuth()
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -27,7 +25,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Redirect root based on role */}
         <Route
           path="/"
           element={
@@ -39,15 +36,12 @@ export default function App() {
           }
         />
 
-        {/* Public */}
         <Route path="/login" element={<Login />} />
 
-        {/* Employee + Manager */}
         <Route path="/orders" element={
           <ProtectedRoute><Orders /></ProtectedRoute>
         } />
 
-        {/* Manager only */}
         <Route path="/dashboard" element={
           <ManagerRoute><Dashboard /></ManagerRoute>
         } />
