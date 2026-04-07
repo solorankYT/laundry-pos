@@ -8,9 +8,10 @@ export default function NewOrderForm({ onClose, onCreated }) {
   const [services, setServices] = useState([])
   const [selected, setSelected] = useState({})
   const [customerName, setCustomerName] = useState('')
+  const [paymentStatus, setPaymentStatus] = useState(null) // null = not selected
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (!user) return
@@ -45,14 +46,12 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setSelected(prev => {
       const item = prev[id]
       if (!item) return prev
-
       const qty = item.quantity + delta
       if (qty <= 0) {
         const copy = { ...prev }
         delete copy[id]
         return copy
       }
-
       return { ...prev, [id]: { ...item, quantity: qty } }
     })
   }
@@ -63,43 +62,50 @@ export default function NewOrderForm({ onClose, onCreated }) {
   )
 
   const handleSubmit = async () => {
-    if (!Object.keys(selected).length) {
-      setError('Select services first')
+    let validationErrors = {}
+    if (!customerName.trim()) validationErrors.customerName = 'Customer name is required'
+    if (paymentStatus === null) validationErrors.paymentStatus = 'Select payment status'
+    if (!Object.keys(selected).length) validationErrors.services = 'Select at least one service'
+
+    if (Object.keys(validationErrors).length) {
+      setErrors(validationErrors)
       return
     }
 
     setSubmitting(true)
-    setError('')
+    setErrors({})
 
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        customer_name: customerName,
-        notes,
-        total,
-        created_by: user.id,
-        status: 'pending',
-      })
-      .select()
-      .single()
+    try {
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          customer_name: customerName.trim(),
+          payment_status: paymentStatus,
+          notes,
+          total,
+          created_by: user.id,
+          status: 'pending',
+        })
+        .select()
+        .single()
 
-    if (orderError) {
-      setError('Failed to create order')
+      if (orderError) throw orderError
+
+      const items = Object.values(selected).map(i => ({
+        order_id: order.id,
+        service_id: i.id,
+        service_name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+      }))
+
+      await supabase.from('order_items').insert(items)
+      onCreated()
+    } catch (err) {
+      console.error(err)
+      setErrors({ submit: 'Failed to create order' })
       setSubmitting(false)
-      return
     }
-
-    const items = Object.values(selected).map(i => ({
-      order_id: order.id,
-      service_id: i.id,
-      service_name: i.name,
-      price: i.price,
-      quantity: i.quantity,
-    }))
-
-    await supabase.from('order_items').insert(items)
-
-    onCreated()
   }
 
   const base = services.filter(s => s.type === 'base')
@@ -116,7 +122,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
         </div>
 
         {/* ERROR */}
-        {error && <div className="text-center text-red-500 p-2">{error}</div>}
+        {errors.submit && <div className="text-center text-red-500 p-2">{errors.submit}</div>}
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
@@ -137,6 +143,10 @@ export default function NewOrderForm({ onClose, onCreated }) {
                 ))}
               </div>
             </Card>
+
+            {errors.services && (
+              <p className="text-red-500 text-xs mt-1">{errors.services}</p>
+            )}
           </div>
 
           {/* CART */}
@@ -160,21 +170,57 @@ export default function NewOrderForm({ onClose, onCreated }) {
             </div>
 
             <CardFooter>
-             <input
-              type="text"
-              name="customer"
-              placeholder="Customer Name"
-              value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="w-full mb-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-              required
-            />
+              {/* Customer Name */}
+              <input
+                type="text"
+                name="customer"
+                placeholder="Customer Name"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                className={`w-full mb-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none ${
+                  errors.customerName ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              {errors.customerName && (
+                <p className="text-red-500 text-xs mt-1">{errors.customerName}</p>
+              )}
 
+              {/* Payment Status Toggle */}
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentStatus(true)}
+                  className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
+                    paymentStatus === true
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentStatus(false)}
+                  className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
+                    paymentStatus === false
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Unpaid
+                </button>
+              </div>
+              {errors.paymentStatus && (
+                <p className="text-red-500 text-xs mt-1">{errors.paymentStatus}</p>
+              )}
+
+              {/* Total */}
               <div className="flex justify-between mb-2 text-base font-medium">
                 <span>Total</span>
                 <span>₱{total.toFixed(2)}</span>
               </div>
 
+              {/* Submit */}
               <button
                 onClick={handleSubmit}
                 disabled={submitting}

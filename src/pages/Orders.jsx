@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import NewOrderForm from '../components/NewOrderForm'
 import OrderCard from '../components/OrderCard'
+import { FiLogOut } from 'react-icons/fi' // Sign out icon
 
 export default function Orders() {
   const { user, signOut, loading: authLoading } = useAuth()
@@ -10,14 +11,20 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all') // new filter state
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (statusFilter = null) => {
     setLoading(true)
-    const { data, error } = await supabase
+    let query = supabase
       .from('orders')
       .select(`*, order_items (id, service_name, price, quantity)`)
       .order('created_at', { ascending: false })
 
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter)
+    }
+
+    const { data, error } = await query
     if (error) setError('Failed to load orders')
     else setOrders(data)
     setLoading(false)
@@ -26,36 +33,43 @@ export default function Orders() {
   useEffect(() => {
     if (!user) return
 
-    fetchOrders()
+    fetchOrders(filter)
 
     const channel = supabase
       .channel('orders-channel')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => { fetchOrders() }
+        () => fetchOrders(filter)
       )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [user])
+  }, [user, filter])
 
   const updateStatus = async (orderId, newStatus) => {
+    setOrders(prevOrders =>
+      prevOrders.map(o =>
+        o.id === orderId ? { ...o, status: newStatus } : o
+      )
+    )
+
     const { error } = await supabase
       .from('orders')
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString()
-      })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', orderId)
 
-    if (error) setError('Failed to update status')
+    if (error) {
+      setError('Failed to update status')
+
+      fetchOrders(filter)
+    }
   }
 
   const handleSignOut = async () => {
     try {
       await signOut()
-    } catch (err) {
+    } catch {
       setError('Failed to sign out')
     }
   }
@@ -66,7 +80,6 @@ export default function Orders() {
     released: orders.filter(o => o.status === 'released'),
   }
 
-  // Wait for auth before rendering anything
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -84,18 +97,32 @@ export default function Orders() {
           <h1 className="text-lg font-semibold text-gray-900">Orders</h1>
           <p className="text-xs text-gray-500">{user?.email}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Filter */}
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            className="text-sm px-3 py-2 border rounded-lg outline-none"
+          >
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="done">Done</option>
+            <option value="released">Released</option>
+          </select>
+
           <button
             onClick={() => setShowForm(true)}
             className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700"
           >
             + New Order
           </button>
+
           <button
             onClick={handleSignOut}
-            className="text-sm px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+            title="Sign Out"
           >
-            Sign Out
+            <FiLogOut size={18} />
           </button>
         </div>
       </div>
@@ -125,7 +152,7 @@ export default function Orders() {
           </div>
         ) : (
           <div className="space-y-6">
-            {Object.entries(grouped).map(([status, statusOrders]) => (
+            {Object.entries(grouped).map(([status, statusOrders]) =>
               statusOrders.length > 0 && (
                 <div key={status}>
                   <div className="flex items-center gap-2 mb-2">
@@ -138,12 +165,13 @@ export default function Orders() {
                         key={order.id}
                         order={order}
                         onUpdateStatus={updateStatus}
+                        showPaymentStatus={true}
                       />
                     ))}
                   </div>
                 </div>
               )
-            ))}
+            )}
           </div>
         )}
       </div>
@@ -154,7 +182,7 @@ export default function Orders() {
           onClose={() => setShowForm(false)}
           onCreated={() => {
             setShowForm(false)
-            fetchOrders()
+            fetchOrders(filter)
           }}
         />
       )}
@@ -165,9 +193,6 @@ export default function Orders() {
 function StatusBadge({ status }) {
   const styles = {
     pending:  'bg-yellow-100 text-yellow-800',
-    washing:  'bg-blue-100 text-blue-800',
-    drying:   'bg-orange-100 text-orange-800',
-    folding:  'bg-purple-100 text-purple-800',
     done:     'bg-green-100 text-green-800',
     released: 'bg-gray-100 text-gray-600',
   }

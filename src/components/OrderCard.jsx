@@ -30,16 +30,27 @@ export default function OrderCard({ order, onUpdateStatus }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-
-      {/* Top row — customer + time */}
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm hover:shadow-md transition-shadow">
+      
+      {/* Top row — customer + payment + time */}
       <div className="flex items-start justify-between">
         <div>
           <p className="font-semibold text-gray-900">{order.customer_name}</p>
+          
+          {/* Payment status badge */}
+          <span
+            className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+              order.payment_status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}
+          >
+            {order.payment_status ? 'Paid' : 'Unpaid'}
+          </span>
+
           {order.customer_contact && (
-            <p className="text-xs text-gray-500">{order.customer_contact}</p>
+            <p className="text-xs text-gray-500 mt-1">{order.customer_contact}</p>
           )}
         </div>
+
         <div className="text-right">
           <p className="text-xs text-gray-400">{formatDate(order.created_at)}</p>
           <p className="text-xs text-gray-400">{formatTime(order.created_at)}</p>
@@ -78,12 +89,12 @@ export default function OrderCard({ order, onUpdateStatus }) {
 
       {/* Status action buttons */}
       {order.status !== 'released' && (
-        <div className="flex gap-2 pt-1">
+        <div className="flex gap-2 pt-2">
           {prevStatus && (
             <button
               onClick={() => handleUpdate(prevStatus)}
               disabled={updating}
-              className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition"
             >
               ← {prevStatus}
             </button>
@@ -92,7 +103,7 @@ export default function OrderCard({ order, onUpdateStatus }) {
             <button
               onClick={() => handleUpdate(nextStatus)}
               disabled={updating}
-              className="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 capitalize"
+              className="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition capitalize"
             >
               {nextStatus} →
             </button>
