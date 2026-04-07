@@ -23,7 +23,7 @@ export default function Login() {
     try {
       await signIn(email, password)
       navigate('/orders', { replace: true })
-    } catch (err) {
+    } catch {
       setError('Invalid email or password')
     } finally {
       setLoading(false)

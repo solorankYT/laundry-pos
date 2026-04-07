@@ -11,7 +11,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState('all') // new filter state
+  const [filter, setFilter] = useState('all')
 
   const fetchOrders = async (statusFilter = null) => {
     setLoading(true)
