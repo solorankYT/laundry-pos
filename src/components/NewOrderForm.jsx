@@ -4,87 +4,78 @@ import { useAuth } from '../hooks/useAuth'
 
 export default function NewOrderForm({ onClose, onCreated }) {
   const { user } = useAuth()
+
   const [services, setServices] = useState([])
   const [selected, setSelected] = useState({})
   const [customerName, setCustomerName] = useState('')
-  const [customerContact, setCustomerContact] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-const fetchServices = async () => {
-  const { data: sessionData } = await supabase.auth.getSession()
-  console.log('session when fetching:', sessionData.session)
-
-  const { data, error } = await supabase
-    .from('services')
-    .select('*')
-    .eq('is_active', true)
-    .order('type')
-
-  console.log('services data:', data)
-  console.log('services error:', error)
-  setServices(data ?? [])
-}
-
-useEffect(() => {
-  if (user) {
+  useEffect(() => {
+    if (!user) return
     fetchServices()
+  }, [user])
+
+  const fetchServices = async () => {
+    const { data } = await supabase
+      .from('services')
+      .select('*')
+      .eq('is_active', true)
+
+    setServices(data ?? [])
   }
-}, [user])
 
   const toggleService = (service) => {
     setSelected(prev => {
       if (prev[service.id]) {
-        // already selected → remove it
-        const updated = { ...prev }
-        delete updated[service.id]
-        return updated
-      } else {
-        // not selected → add with quantity 1
-        return { ...prev, [service.id]: { ...service, quantity: 1 } }
+        return {
+          ...prev,
+          [service.id]: {
+            ...prev[service.id],
+            quantity: prev[service.id].quantity + 1
+          }
+        }
       }
+      return { ...prev, [service.id]: { ...service, quantity: 1 } }
     })
   }
 
-  const changeQuantity = (serviceId, delta) => {
+  const changeQuantity = (id, delta) => {
     setSelected(prev => {
-      const current = prev[serviceId]
-      if (!current) return prev
-      const newQty = current.quantity + delta
-      if (newQty <= 0) {
-        const updated = { ...prev }
-        delete updated[serviceId]
-        return updated
+      const item = prev[id]
+      if (!item) return prev
+
+      const qty = item.quantity + delta
+      if (qty <= 0) {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
       }
-      return { ...prev, [serviceId]: { ...current, quantity: newQty } }
+
+      return { ...prev, [id]: { ...item, quantity: qty } }
     })
   }
 
   const total = Object.values(selected).reduce(
-    (sum, item) => sum + item.price * item.quantity, 0
+    (sum, i) => sum + i.price * i.quantity,
+    0
   )
 
   const handleSubmit = async () => {
-    if (!customerName.trim()) {
-      setError('Customer name is required')
-      return
-    }
-    if (Object.keys(selected).length === 0) {
-      setError('Select at least one service')
+    if (!Object.keys(selected).length) {
+      setError('Select services first')
       return
     }
 
     setSubmitting(true)
     setError('')
 
-    // 1. Create the order
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
-        customer_name: customerName.trim(),
-        customer_contact: customerContact.trim() || null,
-        notes: notes.trim() || null,
+        customer_name: customerName || 'Walk-in',
+        notes,
         total,
         created_by: user.id,
         status: 'pending',
@@ -98,179 +89,151 @@ useEffect(() => {
       return
     }
 
-    // 2. Insert all order items
-    const items = Object.values(selected).map(item => ({
+    const items = Object.values(selected).map(i => ({
       order_id: order.id,
-      service_id: item.id,
-      service_name: item.name,
-      price: item.price,
-      quantity: item.quantity,
+      service_id: i.id,
+      service_name: i.name,
+      price: i.price,
+      quantity: i.quantity,
     }))
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(items)
-
-    if (itemsError) {
-      setError('Failed to save order items')
-      setSubmitting(false)
-      return
-    }
+    await supabase.from('order_items').insert(items)
 
     onCreated()
   }
 
-  const baseServices = services.filter(s => s.type === 'base')
-  const addonServices = services.filter(s => s.type === 'addon')
+  const base = services.filter(s => s.type === 'base')
+  const addons = services.filter(s => s.type === 'addon')
 
   return (
-    // Overlay
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center">
-      {/* Sheet — slides up from bottom on mobile */}
-      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/40 z-50 flex">
 
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold">New Order</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+      <div className="bg-gray-50 w-full flex flex-col">
+
+        {/* HEADER */}
+        <div className="bg-white px-4 py-3 flex justify-between items-center border-b">
+          <h2 className="font-semibold">POS Order</h2>
+          <button onClick={onClose}>✕</button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-4 py-4 space-y-5">
+        <div className="flex flex-1 overflow-hidden">
 
-          {/* Customer info */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Customer name <span className="text-red-500">*</span>
-              </label>
+          {/* LEFT: SERVICES */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+            <Card title="Services">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {base.map(s => (
+                  <ServiceTile key={s.id} service={s} onClick={() => toggleService(s)} />
+                ))}
+              </div>
+            </Card>
+
+            <Card title="Add-ons">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {addons.map(s => (
+                  <ServiceTile key={s.id} service={s} onClick={() => toggleService(s)} />
+                ))}
+              </div>
+            </Card>
+
+          </div>
+
+          {/* RIGHT: CART */}
+          <div className="w-[320px] bg-white border-l flex flex-col">
+
+            <CardHeader title="Order Summary" />
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {Object.values(selected).length === 0 && (
+                <p className="text-sm text-gray-400 text-center mt-10">
+                  No items yet
+                </p>
+              )}
+
+              {Object.values(selected).map(item => (
+                <CartItem
+                  key={item.id}
+                  item={item}
+                  onChangeQty={changeQuantity}
+                />
+              ))}
+            </div>
+
+            <CardFooter>
               <input
+                placeholder="Customer (optional)"
                 value={customerName}
                 onChange={e => setCustomerName(e.target.value)}
-                placeholder="e.g. Juan dela Cruz"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full mb-2 px-3 py-2 border rounded-xl text-sm"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contact (optional)</label>
-              <input
-                value={customerContact}
-                onChange={e => setCustomerContact(e.target.value)}
-                placeholder="09xxxxxxxxx"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+
+              <div className="flex justify-between mb-2">
+                <span>Total</span>
+                <span className="font-bold">₱{total.toFixed(2)}</span>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full py-3 bg-blue-600 text-white rounded-xl"
+              >
+                {submitting ? 'Processing...' : 'Charge'}
+              </button>
+            </CardFooter>
           </div>
 
-          {/* Base services */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Services</p>
-            <div className="space-y-2">
-              {baseServices.map(service => (
-                <ServiceRow
-                  key={service.id}
-                  service={service}
-                  selected={selected[service.id]}
-                  onToggle={() => toggleService(service)}
-                  onChangeQty={(delta) => changeQuantity(service.id, delta)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Add-ons */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Add-ons</p>
-            <div className="space-y-2">
-              {addonServices.map(service => (
-                <ServiceRow
-                  key={service.id}
-                  service={service}
-                  selected={selected[service.id]}
-                  onToggle={() => toggleService(service)}
-                  onChangeQty={(delta) => changeQuantity(service.id, delta)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. delicate clothes, separate colors"
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-        </div>
-
-        {/* Sticky footer with total + submit */}
-        <div className="border-t border-gray-100 px-4 py-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-500">Total</span>
-            <span className="text-xl font-bold text-gray-900">₱{total.toFixed(2)}</span>
-          </div>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50"
-          >
-            {submitting ? 'Creating...' : 'Create Order'}
-          </button>
         </div>
       </div>
     </div>
   )
 }
 
-// Row for each service — tap to select, +/- for quantity
-function ServiceRow({ service, selected, onToggle, onChangeQty }) {
+/* 🔥 SHADCN STYLE CARD */
+function Card({ title, children }) {
   return (
-    <div
-      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-        selected
-          ? 'border-blue-500 bg-blue-50'
-          : 'border-gray-200 bg-white hover:bg-gray-50'
-      }`}
-      onClick={onToggle}
+    <div className="bg-white rounded-2xl shadow-sm border">
+      <div className="px-4 py-3 border-b text-sm font-medium">{title}</div>
+      <div className="p-4">{children}</div>
+    </div>
+  )
+}
+
+function CardHeader({ title }) {
+  return <div className="p-4 border-b font-medium">{title}</div>
+}
+
+function CardFooter({ children }) {
+  return <div className="p-4 border-t">{children}</div>
+}
+
+/* 🔥 POS TILE */
+function ServiceTile({ service, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="p-4 rounded-2xl border bg-white text-left active:scale-[0.97] transition"
     >
+      <p className="text-sm font-medium">{service.name}</p>
+      <p className="text-xs text-gray-400">₱{service.price}</p>
+    </button>
+  )
+}
+
+/* 🔥 CART ITEM */
+function CartItem({ item, onChangeQty }) {
+  return (
+    <div className="flex justify-between items-center p-2 border rounded-xl">
       <div>
-        <p className={`text-sm font-medium ${selected ? 'text-blue-700' : 'text-gray-800'}`}>
-          {service.name}
-        </p>
-        <p className="text-xs text-gray-400">₱{Number(service.price).toFixed(2)}</p>
+        <p className="text-sm">{item.name}</p>
+        <p className="text-xs text-gray-400">₱{item.price}</p>
       </div>
 
-      {selected ? (
-        // Quantity controls
-        <div
-          className="flex items-center gap-3"
-          onClick={e => e.stopPropagation()} // don't toggle when tapping +/-
-        >
-          <button
-            onClick={() => onChangeQty(-1)}
-            className="w-7 h-7 rounded-full border border-blue-300 text-blue-600 flex items-center justify-center text-lg leading-none"
-          >
-            −
-          </button>
-          <span className="text-sm font-semibold text-blue-700 w-4 text-center">
-            {selected.quantity}
-          </span>
-          <button
-            onClick={() => onChangeQty(1)}
-            className="w-7 h-7 rounded-full border border-blue-300 text-blue-600 flex items-center justify-center text-lg leading-none"
-          >
-            +
-          </button>
-        </div>
-      ) : (
-        <span className="text-gray-300 text-lg">+</span>
-      )}
+      <div className="flex items-center gap-2">
+        <button onClick={() => onChangeQty(item.id, -1)}>−</button>
+        <span>{item.quantity}</span>
+        <button onClick={() => onChangeQty(item.id, 1)}>+</button>
+      </div>
     </div>
   )
 }

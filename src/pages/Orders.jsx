@@ -5,41 +5,40 @@ import NewOrderForm from '../components/NewOrderForm'
 import OrderCard from '../components/OrderCard'
 
 export default function Orders() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, loading: authLoading } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
 
+  const fetchOrders = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`*, order_items (id, service_name, price, quantity)`)
+      .order('created_at', { ascending: false })
 
-// Outside useEffect — so onCreated can call it manually
-const fetchOrders = async () => {
-  setLoading(true)
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`*, order_items (id, service_name, price, quantity)`)
-    .order('created_at', { ascending: false })
+    if (error) setError('Failed to load orders')
+    else setOrders(data)
+    setLoading(false)
+  }
 
-  if (error) setError('Failed to load orders')
-  else setOrders(data)
-  setLoading(false)
-}
+  useEffect(() => {
+    if (!user) return
 
-// Subscription inside useEffect only
-useEffect(() => {
-  fetchOrders()
+    fetchOrders()
 
-  const channel = supabase
-    .channel('orders-channel')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'orders' },
-      () => { fetchOrders() }
-    )
-    .subscribe()
+    const channel = supabase
+      .channel('orders-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => { fetchOrders() }
+      )
+      .subscribe()
 
-  return () => supabase.removeChannel(channel)
-}, [])
+    return () => supabase.removeChannel(channel)
+  }, [user])
 
   const updateStatus = async (orderId, newStatus) => {
     const { error } = await supabase
@@ -61,14 +60,23 @@ useEffect(() => {
     }
   }
 
-  // Group orders by status for the kanban-style view
   const grouped = {
     pending:  orders.filter(o => o.status === 'pending'),
+    washing:  orders.filter(o => o.status === 'washing'),
+    drying:   orders.filter(o => o.status === 'drying'),
+    folding:  orders.filter(o => o.status === 'folding'),
     done:     orders.filter(o => o.status === 'done'),
     released: orders.filter(o => o.status === 'released'),
   }
 
-  
+  // Wait for auth before rendering anything
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-400 text-sm">Loading...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -119,7 +127,6 @@ useEffect(() => {
             </button>
           </div>
         ) : (
-          // Status sections — scroll vertically on mobile
           <div className="space-y-6">
             {Object.entries(grouped).map(([status, statusOrders]) => (
               statusOrders.length > 0 && (
@@ -158,7 +165,6 @@ useEffect(() => {
   )
 }
 
-// Small reusable badge for each status
 function StatusBadge({ status }) {
   const styles = {
     pending:  'bg-yellow-100 text-yellow-800',
