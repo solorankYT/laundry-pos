@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import NewOrderForm from '../components/NewOrderForm'
 import OrderCard from '../components/OrderCard'
-import { FiLogOut } from 'react-icons/fi' // Sign out icon
+import { FiLogOut } from 'react-icons/fi'
+
 
 export default function Orders() {
   const { user, signOut, loading: authLoading } = useAuth()
