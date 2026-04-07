@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const STATUS_FLOW = ['pending', 'washing', 'drying', 'folding', 'done', 'released']
+const STATUS_FLOW = ['pending', 'done', 'released']
 
 export default function OrderCard({ order, onUpdateStatus }) {
   const [updating, setUpdating] = useState(false)
