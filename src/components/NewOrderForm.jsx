@@ -8,7 +8,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
   const [services, setServices] = useState([])
   const [selected, setSelected] = useState({})
   const [customerName, setCustomerName] = useState('')
-  const [paymentStatus, setPaymentStatus] = useState(null) // null = not selected
+  const [paymentStatus, setPaymentStatus] = useState(true) // default Paid
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState({})
@@ -27,14 +27,16 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setServices(data ?? [])
   }
 
+  // Toggle individual service
   const toggleService = (service) => {
     setSelected(prev => {
       if (prev[service.id]) {
+        // Increase quantity but max 8
         return {
           ...prev,
           [service.id]: {
             ...prev[service.id],
-            quantity: prev[service.id].quantity + 1
+            quantity: Math.min(prev[service.id].quantity + 1, 8)
           }
         }
       }
@@ -42,6 +44,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
     })
   }
 
+  // Change quantity manually
   const changeQuantity = (id, delta) => {
     setSelected(prev => {
       const item = prev[id]
@@ -52,7 +55,27 @@ export default function NewOrderForm({ onClose, onCreated }) {
         delete copy[id]
         return copy
       }
-      return { ...prev, [id]: { ...item, quantity: qty } }
+      return { ...prev, [id]: { ...item, quantity: Math.min(qty, 8) } }
+    })
+  }
+
+  // Full Service preset
+  const handlePreset = () => {
+    const wash = services.find(s => s.name.toLowerCase().includes('wash'))
+    const dry = services.find(s => s.name.toLowerCase().includes('dry'))
+    const fold = services.find(s => s.name.toLowerCase().includes('fold'))
+    const preset = [wash, dry, fold].filter(Boolean)
+
+    setSelected(prev => {
+      const updated = { ...prev }
+      preset.forEach(service => {
+        if (updated[service.id]) {
+          updated[service.id].quantity = Math.min(updated[service.id].quantity + 1, 8)
+        } else {
+          updated[service.id] = { ...service, quantity: 1 }
+        }
+      })
+      return updated
     })
   }
 
@@ -112,127 +135,123 @@ export default function NewOrderForm({ onClose, onCreated }) {
   const addons = services.filter(s => s.type === 'addon')
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center p-2">
-      <div className="bg-gray-50 w-full max-w-3xl flex flex-col rounded-2xl shadow-lg overflow-hidden">
+    <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-end p-2">
+  <div className="bg-gray-50 w-full max-w-3xl flex flex-col rounded-t-2xl shadow-lg overflow-hidden h-[90vh]">
 
-        {/* HEADER */}
-        <div className="bg-white px-4 py-3 flex justify-between items-center border-b sticky top-0 z-10">
-          <h2 className="font-semibold text-lg">POS Order</h2>
-          <button onClick={onClose} className="text-xl hover:text-red-500">✕</button>
+    {/* HEADER */}
+    <div className="bg-white px-4 py-3 flex justify-between items-center border-b sticky top-0 z-10">
+      <h2 className="font-semibold text-lg">POS Order</h2>
+      <button onClick={onClose} className="text-xl hover:text-red-500">✕</button>
+    </div>
+
+    {/* SERVICES SCROLL */}
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+
+      {/* Quick Preset */}
+      <Card title="Quick Actions">
+        <button
+          onClick={handlePreset}
+          className="p-4 rounded-2xl bg-blue-600 text-white shadow w-full active:scale-95"
+        >
+          <p className="font-medium">Full Service</p>
+          <p className="text-xs opacity-80">Wash + Dry + Fold</p>
+        </button>
+      </Card>
+
+      {/* Base Services */}
+      <Card title="Services">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {base.map(s => (
+            <ServiceTile
+              key={s.id}
+              service={s}
+              onClick={() => toggleService(s)}
+              selected={!!selected[s.id]}
+              quantity={selected[s.id]?.quantity}
+            />
+          ))}
         </div>
+      </Card>
 
-        {/* ERROR */}
-        {errors.submit && <div className="text-center text-red-500 p-2">{errors.submit}</div>}
-
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-
-          {/* SERVICES */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <Card title="Services">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {base.map(s => (
-                  <ServiceTile key={s.id} service={s} onClick={() => toggleService(s)} />
-                ))}
-              </div>
-            </Card>
-
-            <Card title="Add-ons">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {addons.map(s => (
-                  <ServiceTile key={s.id} service={s} onClick={() => toggleService(s)} />
-                ))}
-              </div>
-            </Card>
-
-            {errors.services && (
-              <p className="text-red-500 text-xs mt-1">{errors.services}</p>
-            )}
-          </div>
-
-          {/* CART */}
-          <div className="md:w-[320px] bg-white border-t md:border-t-0 md:border-l flex flex-col">
-            <CardHeader title="Order Summary" />
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {Object.values(selected).length === 0 && (
-                <p className="text-sm text-gray-400 text-center mt-10">
-                  No items yet
-                </p>
-              )}
-
-              {Object.values(selected).map(item => (
-                <CartItem
-                  key={item.id}
-                  item={item}
-                  onChangeQty={changeQuantity}
-                />
-              ))}
-            </div>
-
-            <CardFooter>
-              {/* Customer Name */}
-              <input
-                type="text"
-                name="customer"
-                placeholder="Customer Name"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className={`w-full mb-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none ${
-                  errors.customerName ? 'border-red-500' : 'border-gray-300'
-                }`}
-              />
-              {errors.customerName && (
-                <p className="text-red-500 text-xs mt-1">{errors.customerName}</p>
-              )}
-
-              {/* Payment Status Toggle */}
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentStatus(true)}
-                  className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
-                    paymentStatus === true
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Paid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentStatus(false)}
-                  className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
-                    paymentStatus === false
-                      ? 'bg-red-600 text-white border-red-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Unpaid
-                </button>
-              </div>
-              {errors.paymentStatus && (
-                <p className="text-red-500 text-xs mt-1">{errors.paymentStatus}</p>
-              )}
-
-              {/* Total */}
-              <div className="flex justify-between mb-2 text-base font-medium">
-                <span>Total</span>
-                <span>₱{total.toFixed(2)}</span>
-              </div>
-
-              {/* Submit */}
-              <button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 active:scale-[0.97] transition"
-              >
-                {submitting ? 'Processing...' : 'Charge'}
-              </button>
-            </CardFooter>
-          </div>
+      {/* Add-ons */}
+      <Card title="Add-ons">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {addons.map(s => (
+            <ServiceTile
+              key={s.id}
+              service={s}
+              onClick={() => toggleService(s)}
+              selected={!!selected[s.id]}
+              quantity={selected[s.id]?.quantity}
+            />
+          ))}
         </div>
+      </Card>
+
+    </div>
+
+    {/* BOTTOM CART (sticky) */}
+    <div className="bg-white border-t p-4 sticky bottom-0 z-20 shadow-md">
+      {/* Customer */}
+      <input
+        type="text"
+        placeholder="Customer Name"
+        value={customerName}
+        onChange={e => setCustomerName(e.target.value)}
+        className="w-full mb-2 px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+      />
+
+      {/* Payment */}
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setPaymentStatus(true)}
+          className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
+            paymentStatus === true
+              ? 'bg-green-600 text-white border-green-600'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          Paid
+        </button>
+        <button
+          type="button"
+          onClick={() => setPaymentStatus(false)}
+          className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${
+            paymentStatus === false
+              ? 'bg-red-600 text-white border-red-600'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          Unpaid
+        </button>
+      </div>
+
+      {/* Cart Items */}
+      <div className="max-h-40 overflow-y-auto mb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 space-y-2">
+        {Object.values(selected).length === 0 ? (
+          <p className="text-sm text-gray-400 text-center">No items yet</p>
+        ) : (
+          Object.values(selected).map(item => (
+            <CartItem key={item.id} item={item} onChangeQty={changeQuantity} />
+          ))
+        )}
+      </div>
+
+      {/* Total + Submit */}
+      <div className="flex justify-between items-center mb-2">
+        <span className="font-medium text-base">Total: ₱{total.toFixed(2)}</span>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !Object.keys(selected).length}
+          className="ml-2 py-2 px-4 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 active:scale-[0.97] transition disabled:opacity-50"
+        >
+          {submitting ? 'Processing...' : 'Complete Order'}
+        </button>
       </div>
     </div>
+  </div>
+</div>
   )
 }
 
@@ -255,14 +274,19 @@ function CardFooter({ children }) {
 }
 
 /* SERVICE TILE */
-function ServiceTile({ service, onClick }) {
+function ServiceTile({ service, onClick, selected, quantity }) {
   return (
     <button
       onClick={onClick}
-      className="p-4 rounded-2xl border bg-white text-left active:scale-[0.97] transition hover:shadow-md"
+      className={`p-4 rounded-2xl border text-left transition relative
+        ${selected 
+          ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+          : 'bg-white hover:shadow-md'}
+      `}
     >
       <p className="text-sm font-medium">{service.name}</p>
-      <p className="text-xs text-gray-400">₱{service.price}</p>
+      <p className={`text-xs ${selected ? 'opacity-70' : 'text-gray-400'}`}>₱{service.price}</p>
+      {quantity && <span className="absolute top-2 right-2 text-xs bg-white text-black px-2 py-1 rounded-full">{quantity}</span>}
     </button>
   )
 }
