@@ -62,9 +62,6 @@ export default function Orders() {
 
   const grouped = {
     pending:  orders.filter(o => o.status === 'pending'),
-    washing:  orders.filter(o => o.status === 'washing'),
-    drying:   orders.filter(o => o.status === 'drying'),
-    folding:  orders.filter(o => o.status === 'folding'),
     done:     orders.filter(o => o.status === 'done'),
     released: orders.filter(o => o.status === 'released'),
   }
