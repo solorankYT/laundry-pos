@@ -12,10 +12,11 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState('pending')
 
   const fetchOrders = async (statusFilter = null) => {
     setLoading(true)
+
     let query = supabase
       .from('orders')
       .select(`*, order_items (id, service_name, price, quantity)`)
@@ -28,6 +29,7 @@ export default function Orders() {
     const { data, error } = await query
     if (error) setError('Failed to load orders')
     else setOrders(data)
+
     setLoading(false)
   }
 
@@ -49,10 +51,8 @@ export default function Orders() {
   }, [user, filter])
 
   const updateStatus = async (orderId, newStatus) => {
-    setOrders(prevOrders =>
-      prevOrders.map(o =>
-        o.id === orderId ? { ...o, status: newStatus } : o
-      )
+    setOrders(prev =>
+      prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
     )
 
     const { error } = await supabase
@@ -62,122 +62,75 @@ export default function Orders() {
 
     if (error) {
       setError('Failed to update status')
-
       fetchOrders(filter)
     }
   }
 
-  const handleSignOut = async () => {
-    try {
-      await signOut()
-    } catch {
-      setError('Failed to sign out')
-    }
-  }
-
-  const grouped = {
-    pending:  orders.filter(o => o.status === 'pending'),
-    done:     orders.filter(o => o.status === 'done'),
-    released: orders.filter(o => o.status === 'released'),
-  }
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400 text-sm">Loading...</p>
-      </div>
-    )
-  }
+  if (authLoading) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
 
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Orders</h1>
-          <p className="text-xs text-gray-500">{user?.email}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Filter */}
-          <select
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            className="text-sm px-3 py-2 border rounded-lg outline-none"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="done">Done</option>
-            <option value="released">Released</option>
-          </select>
-
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            + New Order
-          </button>
-
-          <button
-            onClick={handleSignOut}
-            className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-            title="Sign Out"
-          >
-            <FiLogOut size={18} />
-          </button>
-        </div>
+      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
+        <h1 className="text-lg font-semibold text-gray-800">Orders</h1>
+        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2">
-          <p className="text-red-600 text-sm">{error}</p>
-        </div>
-      )}
+      <div className="bg-white border-b flex justify-around text-sm sticky top-[60px] z-10">
+        {['pending', 'done', 'released'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setFilter(tab)}
+            className={`flex-1 py-3 capitalize ${
+              filter === tab
+                ? 'text-blue-600 border-b-2 border-blue-600 font-medium'
+                : 'text-gray-400'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-      {/* Content */}
-      <div className="p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-24">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <p className="text-gray-400">Loading orders...</p>
-          </div>
+          <p className="text-center text-gray-400 mt-10">Loading...</p>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-2">
-            <p className="text-gray-400 text-sm">No orders yet</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="text-blue-600 text-sm underline"
-            >
-              Create the first one
-            </button>
+          <div className="text-center mt-20 text-gray-400">
+            No orders
           </div>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(grouped).map(([status, statusOrders]) =>
-              statusOrders.length > 0 && (
-                <div key={status}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <StatusBadge status={status} />
-                    <span className="text-xs text-gray-400">{statusOrders.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {statusOrders.map(order => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        onUpdateStatus={updateStatus}
-                        showPaymentStatus={true}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            )}
+          <div className="space-y-3">
+            {orders.map(order => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onUpdateStatus={updateStatus}
+                showPaymentStatus
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* New Order modal */}
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-20 right-4 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg text-xl"
+      >
+        +
+      </button>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-between items-center">
+        <span className="text-xs text-gray-400">POS Ready</span>
+        <button
+          onClick={signOut}
+          className="text-sm text-red-500"
+        >
+          Logout
+        </button>
+      </div>
+
+
       {showForm && (
         <NewOrderForm
           onClose={() => setShowForm(false)}
@@ -188,18 +141,5 @@ export default function Orders() {
         />
       )}
     </div>
-  )
-}
-
-function StatusBadge({ status }) {
-  const styles = {
-    pending:  'bg-yellow-100 text-yellow-800',
-    done:     'bg-green-100 text-green-800',
-    released: 'bg-gray-100 text-gray-600',
-  }
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${styles[status]}`}>
-      {status}
-    </span>
   )
 }
