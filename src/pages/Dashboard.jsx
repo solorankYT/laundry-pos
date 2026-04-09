@@ -32,7 +32,6 @@ export default function Dashboard() {
 
             <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
 
-            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <KPICard title="Total Revenue" value="₱45,000" />
                 <KPICard title="Total Orders" value="120" icon={<FiBox />} />

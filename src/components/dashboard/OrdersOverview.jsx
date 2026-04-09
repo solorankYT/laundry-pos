@@ -53,7 +53,6 @@ export default function OrdersOverview() {
           <h3 className="text-gray-500 text-sm">Revenue</h3>
           <p className="text-xl font-bold">₱{stats.revenue}</p>
         </div>
-        <FiDollarSign className="text-2xl text-blue-500" />
       </div>
     </div>
   );

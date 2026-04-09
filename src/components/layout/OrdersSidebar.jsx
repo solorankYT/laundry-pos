@@ -2,9 +2,9 @@ import { FiHome, FiLogOut, FiBox } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function OrdersSidebar({ isOpen, toggleSidebar }) {
-  const { user, logout } = useAuth();
+  const { user, logout, role } = useAuth();
 
-  const isAdmin = user?.role === 'admin'; 
+  const isAdmin = role === 'manager';
 
   return (
     <aside
@@ -37,7 +37,6 @@ export default function OrdersSidebar({ isOpen, toggleSidebar }) {
         )}
       </nav>
 
-      {/* Logout */}
       <button
         onClick={logout}
         className="mt-auto flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition w-full text-left"
