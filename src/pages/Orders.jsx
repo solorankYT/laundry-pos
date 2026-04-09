@@ -7,6 +7,9 @@ import OrderCard from '../components/orders/OrderCard'
 import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
 
+import OrdersSidebar from '../components/layout/OrdersSidebar';
+import { FiMenu } from 'react-icons/fi';
+
 export default function Orders() {
   const { user } = useAuth()
 
@@ -16,8 +19,8 @@ export default function Orders() {
 
   const [showForm, setShowForm] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // 🔥 FETCH ORDERS
   const fetchOrders = async () => {
     setLoading(true)
 
@@ -53,7 +56,6 @@ export default function Orders() {
     setLoading(false)
   }
 
-  // 🔥 REALTIME SUBSCRIPTION
   useEffect(() => {
     if (!user) return
 
@@ -71,7 +73,6 @@ export default function Orders() {
     return () => supabase.removeChannel(channel)
   }, [user, filter])
 
-  // 🔥 KEEP DRAWER IN SYNC (IMPORTANT)
   useEffect(() => {
     if (!selectedOrder) return
 
@@ -79,7 +80,6 @@ export default function Orders() {
     if (updated) setSelectedOrder(updated)
   }, [orders])
 
-  // 🔥 UPDATE STATUS (OPTIMISTIC)
   const updateStatus = async (id, status) => {
     setOrders(prev =>
       prev.map(o => (o.id === id ? { ...o, status } : o))
@@ -98,7 +98,7 @@ export default function Orders() {
     if (error) fetchOrders()
   }
 
-  // 🔥 MARK AS PAID
+
   const markPaid = async (id) => {
     setOrders(prev =>
       prev.map(o => (o.id === id ? { ...o, payment_status: true } : o))
@@ -113,19 +113,38 @@ export default function Orders() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+  <div className="flex h-screen">
+    <OrdersSidebar
+      isOpen={sidebarOpen}
+      toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+    />
 
-      {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-lg font-semibold">Orders</h1>
+    {sidebarOpen && (
+      <div
+        className="fixed inset-0 bg-black opacity-50 z-40 md:hidden"
+        onClick={() => setSidebarOpen(false)}
+      />
+    )}
 
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition"
-        >
-          + New Order
-        </button>
-      </div>
+    <main className="flex-1 ml-0 md:ml-64 p-4 md:p-6 space-y-4 overflow-y-auto">
+     <div className="flex justify-between items-center">
+
+  <button
+    className="md:hidden p-2 rounded-lg bg-gray-900 text-white mr-2"
+    onClick={() => setSidebarOpen(!sidebarOpen)}
+    >
+      <FiMenu size={20} />
+    </button>
+
+    <h1 className="text-lg font-semibold flex-1">Orders</h1>
+
+    <button
+      onClick={() => setShowForm(true)}
+      className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition"
+    >
+      + New Order
+    </button>
+  </div>
 
       {/* FILTERS */}
       <div className="flex gap-2 overflow-x-auto">
@@ -144,7 +163,6 @@ export default function Orders() {
         ))}
       </div>
 
-      {/* CONTENT */}
       {loading ? (
         <div className="flex justify-center mt-10">
           <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
@@ -158,9 +176,7 @@ export default function Orders() {
         </div>
       ) : (
         <>
-          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
-
             <div className="grid grid-cols-6 text-xs text-gray-500 px-4 py-3 border-b">
               <span>Customer</span>
               <span>Services</span>
@@ -198,17 +214,18 @@ export default function Orders() {
         </>
       )}
 
-      {/* NEW ORDER */}
+      {/* NEW ORDER FORM */}
       {showForm && (
         <NewOrderForm
           onClose={() => setShowForm(false)}
           onCreated={() => {
-            setShowForm(false)
-            fetchOrders()
+            setShowForm(false);
+            fetchOrders();
           }}
         />
       )}
 
+      {/* ORDER DRAWER */}
       {selectedOrder && (
         <OrderDrawer
           order={selectedOrder}
@@ -217,7 +234,7 @@ export default function Orders() {
           onMarkPaid={markPaid}
         />
       )}
-
-    </div>
-  )
+    </main>
+  </div>
+)
 }
