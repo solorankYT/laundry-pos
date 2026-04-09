@@ -209,7 +209,6 @@ export default function Orders() {
         />
       )}
 
-      {/* DRAWER */}
       {selectedOrder && (
         <OrderDrawer
           order={selectedOrder}
