@@ -1,20 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import NewOrderForm from '../components/NewOrderForm'
-import OrderCard from '../components/OrderCard'
-import { FiLogOut } from 'react-icons/fi'
 
+import OrderRow from '../components/orders/OrderRow'
+import OrderCard from '../components/orders/OrderCard'
+import OrderDrawer from '../components/orders/OrderDrawer'
+import NewOrderForm from '../components/orders/NewOrderForm'
 
 export default function Orders() {
-  const { user, signOut, loading: authLoading } = useAuth()
+  const { user } = useAuth()
+
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [error, setError] = useState('')
   const [filter, setFilter] = useState('pending')
 
-  const fetchOrders = async (statusFilter = null) => {
+  const [showForm, setShowForm] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState(null)
+
+  // 🔥 FETCH ORDERS
+  const fetchOrders = async () => {
     setLoading(true)
 
     let query = supabase
@@ -22,124 +26,199 @@ export default function Orders() {
       .select(`*, order_items (id, service_name, price, quantity)`)
       .order('created_at', { ascending: false })
 
-    if (statusFilter && statusFilter !== 'all') {
-      query = query.eq('status', statusFilter)
+    if (filter !== 'all') {
+      query = query.eq('status', filter)
     }
 
     const { data, error } = await query
-    if (error) setError('Failed to load orders')
-    else setOrders(data)
+
+    if (!error) {
+      // 🔥 PRIORITY SORTING (REAL BUSINESS LOGIC)
+      const sorted = (data || []).sort((a, b) => {
+        // unpaid first
+        if (!a.payment_status && b.payment_status) return -1
+        if (a.payment_status && !b.payment_status) return 1
+
+        // pending first
+        if (a.status === 'pending' && b.status !== 'pending') return -1
+        if (a.status !== 'pending' && b.status === 'pending') return 1
+
+        // newest
+        return new Date(b.created_at) - new Date(a.created_at)
+      })
+
+      setOrders(sorted)
+    }
 
     setLoading(false)
   }
 
+  // 🔥 REALTIME SUBSCRIPTION
   useEffect(() => {
     if (!user) return
 
-    fetchOrders(filter)
+    fetchOrders()
 
     const channel = supabase
-      .channel('orders-channel')
+      .channel('orders-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => fetchOrders(filter)
+        fetchOrders
       )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
   }, [user, filter])
 
-  const updateStatus = async (orderId, newStatus) => {
+  // 🔥 KEEP DRAWER IN SYNC (IMPORTANT)
+  useEffect(() => {
+    if (!selectedOrder) return
+
+    const updated = orders.find(o => o.id === selectedOrder.id)
+    if (updated) setSelectedOrder(updated)
+  }, [orders])
+
+  // 🔥 UPDATE STATUS (OPTIMISTIC)
+  const updateStatus = async (id, status) => {
     setOrders(prev =>
-      prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
+      prev.map(o => (o.id === id ? { ...o, status } : o))
+    )
+
+    // auto close when released
+    if (status === 'released') {
+      setSelectedOrder(null)
+    }
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', id)
+
+    if (error) fetchOrders()
+  }
+
+  // 🔥 MARK AS PAID
+  const markPaid = async (id) => {
+    setOrders(prev =>
+      prev.map(o => (o.id === id ? { ...o, payment_status: true } : o))
     )
 
     const { error } = await supabase
       .from('orders')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', orderId)
+      .update({ payment_status: true })
+      .eq('id', id)
 
-    if (error) {
-      setError('Failed to update status')
-      fetchOrders(filter)
-    }
+    if (error) fetchOrders()
   }
 
-  if (authLoading) return null
-
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="p-4 md:p-6 space-y-4">
 
-      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
-        <h1 className="text-lg font-semibold text-gray-800">Orders</h1>
-        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-lg font-semibold">Orders</h1>
+
+        <button
+          onClick={() => setShowForm(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition"
+        >
+          + New Order
+        </button>
       </div>
 
-      <div className="bg-white border-b flex justify-around text-sm sticky top-[60px] z-10">
-        {['pending', 'done', 'released'].map(tab => (
+      {/* FILTERS */}
+      <div className="flex gap-2 overflow-x-auto">
+        {['pending', 'done', 'released', 'all'].map(tab => (
           <button
             key={tab}
             onClick={() => setFilter(tab)}
-            className={`flex-1 py-3 capitalize ${
-              filter === tab
-                ? 'text-blue-600 border-b-2 border-blue-600 font-medium'
-                : 'text-gray-400'
-            }`}
+            className={`px-3 py-2 text-xs rounded-full capitalize whitespace-nowrap transition
+              ${filter === tab
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             {tab}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 pb-24">
-        {loading ? (
-          <p className="text-center text-gray-400 mt-10">Loading...</p>
-        ) : orders.length === 0 ? (
-          <div className="text-center mt-20 text-gray-400">
-            No orders
+      {/* CONTENT */}
+      {loading ? (
+        <div className="flex justify-center mt-10">
+          <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center mt-20">
+          <p className="text-gray-400 text-sm">No orders here</p>
+          <p className="text-xs text-gray-300 mt-1">
+            Try switching filter or create a new order
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* DESKTOP TABLE */}
+          <div className="hidden md:block bg-white rounded-xl border overflow-hidden">
+
+            <div className="grid grid-cols-6 text-xs text-gray-500 px-4 py-3 border-b">
+              <span>Customer</span>
+              <span>Services</span>
+              <span>Total</span>
+              <span>Payment</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+
+            {orders.map(order => (
+              <OrderRow
+                key={order.id}
+                order={order}
+                onClick={() => setSelectedOrder(order)}
+                onUpdateStatus={updateStatus}
+                onMarkPaid={markPaid}
+                isActive={selectedOrder?.id === order.id}
+              />
+            ))}
           </div>
-        ) : (
-          <div className="space-y-3">
+
+          {/* MOBILE CARDS */}
+          <div className="md:hidden space-y-3">
             {orders.map(order => (
               <OrderCard
                 key={order.id}
                 order={order}
+                onClick={() => setSelectedOrder(order)}
                 onUpdateStatus={updateStatus}
-                showPaymentStatus
+                onMarkPaid={markPaid}
+                isActive={selectedOrder?.id === order.id}
               />
             ))}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      <button
-        onClick={() => setShowForm(true)}
-        className="fixed bottom-20 right-4 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg text-xl"
-      >
-        +
-      </button>
-
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-between items-center">
-        <span className="text-xs text-gray-400">POS Ready</span>
-        <button
-          onClick={signOut}
-          className="text-sm text-red-500"
-        >
-          Logout
-        </button>
-      </div>
-
-
+      {/* NEW ORDER */}
       {showForm && (
         <NewOrderForm
           onClose={() => setShowForm(false)}
           onCreated={() => {
             setShowForm(false)
-            fetchOrders(filter)
+            fetchOrders()
           }}
         />
       )}
+
+      {/* DRAWER */}
+      {selectedOrder && (
+        <OrderDrawer
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onUpdateStatus={updateStatus}
+          onMarkPaid={markPaid}
+        />
+      )}
+
     </div>
   )
 }

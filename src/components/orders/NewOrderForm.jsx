@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../hooks/useAuth'
 
 export default function NewOrderForm({ onClose, onCreated }) {
   const { user } = useAuth()
