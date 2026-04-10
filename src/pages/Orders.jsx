@@ -119,7 +119,7 @@ export default function Orders() {
             <FiMenu size={18} />
           </button>
 
-          <h1 className="text-base font-semibold text-gray-900 flex-1">Orders</h1>
+          <div className="text-base font-semibold text-gray-900 flex-1">Orders</div>
 
           {/* Desktop new order button */}
           <button
