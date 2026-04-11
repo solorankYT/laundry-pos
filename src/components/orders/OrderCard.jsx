@@ -17,7 +17,7 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
   const isPaid = order.payment_status
 
   const servicesSummary = order.order_items
-    ?.map(i => i.quantity > 1 ? `${i.service_name} ×${i.quantity}` : i.service_name)
+    ?.map(i => i.quantity > 1 ? `${i.service_name} ` : i.service_name)
     .join(' · ') || '—'
 
   const handleAdvance = async (e) => {
