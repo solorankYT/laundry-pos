@@ -7,7 +7,9 @@ export default function NewOrderForm({ onClose, onCreated }) {
   const nameRef = useRef(null)
 
   const [services, setServices] = useState([])
-  const [selected, setSelected] = useState({})
+  const [addons, setAddons] = useState([])
+  const [selectedServices, setSelectedServices] = useState({})
+  const [selectedAddons, setSelectedAddons] = useState({})
   const [customerName, setCustomerName] = useState('')
   const [paymentStatus, setPaymentStatus] = useState(true)
   const [notes, setNotes] = useState('')
@@ -17,23 +19,22 @@ export default function NewOrderForm({ onClose, onCreated }) {
 
   useEffect(() => {
     if (!user) return
-    fetchServices()
-    // Auto-focus customer name on open
+    fetchData()
     setTimeout(() => nameRef.current?.focus(), 120)
   }, [user])
 
-  const fetchServices = async () => {
-    const { data } = await supabase
-      .from('services')
-      .select('*')
-      .eq('is_active', true)
-      .order('type')
-      .order('name')
-    setServices(data ?? [])
+  const fetchData = async () => {
+    const [{ data: svcData }, { data: addonData }] = await Promise.all([
+      supabase.from('services').select('*').eq('is_active', true).order('name'),
+      supabase.from('addons').select('*').eq('is_active', true).order('name'),
+    ])
+    setServices(svcData ?? [])
+    setAddons(addonData ?? [])
   }
 
+  // ── Service helpers ──────────────────────────────────
   const toggleService = (service) => {
-    setSelected(prev => {
+    setSelectedServices(prev => {
       if (prev[service.id]) {
         const qty = prev[service.id].quantity
         if (qty >= 8) return prev
@@ -43,8 +44,8 @@ export default function NewOrderForm({ onClose, onCreated }) {
     })
   }
 
-  const changeQty = (id, delta) => {
-    setSelected(prev => {
+  const changeServiceQty = (id, delta) => {
+    setSelectedServices(prev => {
       const item = prev[id]
       if (!item) return prev
       const qty = item.quantity + delta
@@ -57,11 +58,39 @@ export default function NewOrderForm({ onClose, onCreated }) {
     })
   }
 
+  // ── Addon helpers ────────────────────────────────────
+  const toggleAddon = (addon) => {
+    setSelectedAddons(prev => {
+      if (prev[addon.id]) {
+        const qty = prev[addon.id].quantity
+        if (qty >= 8) return prev
+        return { ...prev, [addon.id]: { ...prev[addon.id], quantity: qty + 1 } }
+      }
+      return { ...prev, [addon.id]: { ...addon, quantity: 1 } }
+    })
+  }
+
+  const changeAddonQty = (id, delta) => {
+    setSelectedAddons(prev => {
+      const item = prev[id]
+      if (!item) return prev
+      const qty = item.quantity + delta
+      if (qty <= 0) {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      }
+      return { ...prev, [id]: { ...item, quantity: Math.min(qty, 8) } }
+    })
+  }
+
+  // ── Full service preset ─────────────────────────────
+  // Finds services whose name contains wash, dry, or fold and adds 1 of each
   const applyPreset = () => {
-    const targets = ['wash', 'dry', 'fold']
-    setSelected(prev => {
+    const keywords = ['wash', 'dry', 'fold']
+    setSelectedServices(prev => {
       const updated = { ...prev }
-      targets.forEach(keyword => {
+      keywords.forEach(keyword => {
         const svc = services.find(s => s.name.toLowerCase().includes(keyword))
         if (!svc) return
         if (updated[svc.id]) {
@@ -74,14 +103,20 @@ export default function NewOrderForm({ onClose, onCreated }) {
     })
   }
 
-  const total = Object.values(selected).reduce(
+  // ── Totals ───────────────────────────────────────────
+  const serviceTotal = Object.values(selectedServices).reduce(
     (sum, i) => sum + i.price * i.quantity, 0
   )
-
-  const itemCount = Object.values(selected).reduce(
-    (sum, i) => sum + i.quantity, 0
+  const addonTotal = Object.values(selectedAddons).reduce(
+    (sum, i) => sum + i.price * i.quantity, 0
   )
+  const total = serviceTotal + addonTotal
 
+  const serviceCount = Object.values(selectedServices).reduce((sum, i) => sum + i.quantity, 0)
+  const addonCount = Object.values(selectedAddons).reduce((sum, i) => sum + i.quantity, 0)
+  const itemCount = serviceCount + addonCount
+
+  // ── Submit ───────────────────────────────────────────
   const handleSubmit = async () => {
     const errs = {}
     if (!customerName.trim()) errs.name = 'Enter customer name'
@@ -92,6 +127,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setErrors({})
 
     try {
+      // 1. Create the order
       const { data: order, error: orderErr } = await supabase
         .from('orders')
         .insert({
@@ -107,16 +143,31 @@ export default function NewOrderForm({ onClose, onCreated }) {
 
       if (orderErr) throw orderErr
 
-      const items = Object.values(selected).map(i => ({
-        order_id: order.id,
-        service_id: i.id,
-        service_name: i.name,
-        price: i.price,
-        quantity: i.quantity,
-      }))
+      // 2. Insert order_items (services)
+      if (serviceCount > 0) {
+        const items = Object.values(selectedServices).map(i => ({
+          order_id: order.id,
+          service_id: i.id,
+          service_name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+        }))
+        const { error: itemsErr } = await supabase.from('order_items').insert(items)
+        if (itemsErr) throw itemsErr
+      }
 
-      const { error: itemsErr } = await supabase.from('order_items').insert(items)
-      if (itemsErr) throw itemsErr
+      // 3. Insert order_addons (addons)
+      if (addonCount > 0) {
+        const addonRows = Object.values(selectedAddons).map(i => ({
+          order_id: order.id,
+          addon_id: i.id,
+          quantity: i.quantity,
+          unit_price: i.price,
+          total: i.price * i.quantity,
+        }))
+        const { error: addonsErr } = await supabase.from('order_addons').insert(addonRows)
+        if (addonsErr) throw addonsErr
+      }
 
       onCreated()
     } catch (err) {
@@ -126,13 +177,11 @@ export default function NewOrderForm({ onClose, onCreated }) {
     }
   }
 
-  const base = services.filter(s => s.type === 'base')
-  const addons = services.filter(s => s.type === 'addon')
-
+  // ── Render ───────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-50">
 
-      {/* ── HEADER ─────────────────────────────────────── */}
+      {/* HEADER */}
       <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
         <button
           onClick={onClose}
@@ -148,10 +197,8 @@ export default function NewOrderForm({ onClose, onCreated }) {
         )}
       </div>
 
-      {/* ── STICKY TOP — customer + payment ────────────── */}
+      {/* STICKY TOP — customer + payment */}
       <div className="bg-white border-b px-4 py-3 space-y-2.5">
-
-        {/* Customer name */}
         <div>
           <input
             ref={nameRef}
@@ -165,12 +212,9 @@ export default function NewOrderForm({ onClose, onCreated }) {
               ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-200'}
             `}
           />
-          {errors.name && (
-            <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-          )}
+          {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
         </div>
 
-        {/* Payment toggle */}
         <div className="flex gap-2">
           <PayToggle
             label="Paid"
@@ -187,7 +231,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
         </div>
       </div>
 
-      {/* ── SCROLLABLE — services ──────────────────────── */}
+      {/* SCROLLABLE — services + addons */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 
         {/* Quick preset */}
@@ -203,18 +247,18 @@ export default function NewOrderForm({ onClose, onCreated }) {
           ⚡ Full Service — Wash + Dry + Fold
         </button>
 
-        {/* Base services */}
-        {base.length > 0 && (
+        {/* Services */}
+        {services.length > 0 && (
           <Section title="Services" error={errors.services}>
             <div className="grid grid-cols-2 gap-2.5">
-              {base.map(s => (
+              {services.map(s => (
                 <ServiceTile
                   key={s.id}
                   service={s}
-                  qty={selected[s.id]?.quantity ?? 0}
+                  qty={selectedServices[s.id]?.quantity ?? 0}
                   onTap={() => toggleService(s)}
-                  onMinus={e => { e.stopPropagation(); changeQty(s.id, -1) }}
-                  onPlus={e => { e.stopPropagation(); changeQty(s.id, 1) }}
+                  onMinus={e => { e.stopPropagation(); changeServiceQty(s.id, -1) }}
+                  onPlus={e => { e.stopPropagation(); changeServiceQty(s.id, 1) }}
                 />
               ))}
             </div>
@@ -225,21 +269,21 @@ export default function NewOrderForm({ onClose, onCreated }) {
         {addons.length > 0 && (
           <Section title="Add-ons">
             <div className="grid grid-cols-2 gap-2.5">
-              {addons.map(s => (
+              {addons.map(a => (
                 <ServiceTile
-                  key={s.id}
-                  service={s}
-                  qty={selected[s.id]?.quantity ?? 0}
-                  onTap={() => toggleService(s)}
-                  onMinus={e => { e.stopPropagation(); changeQty(s.id, -1) }}
-                  onPlus={e => { e.stopPropagation(); changeQty(s.id, 1) }}
+                  key={a.id}
+                  service={a}
+                  qty={selectedAddons[a.id]?.quantity ?? 0}
+                  onTap={() => toggleAddon(a)}
+                  onMinus={e => { e.stopPropagation(); changeAddonQty(a.id, -1) }}
+                  onPlus={e => { e.stopPropagation(); changeAddonQty(a.id, 1) }}
                 />
               ))}
             </div>
           </Section>
         )}
 
-        {/* Notes (collapsible) */}
+        {/* Notes */}
         <div>
           <button
             onClick={() => setShowNotes(p => !p)}
@@ -255,48 +299,42 @@ export default function NewOrderForm({ onClose, onCreated }) {
               rows={3}
               className="
                 mt-2 w-full px-3 py-2 rounded-xl border border-gray-200
-                text-sm bg-white focus:ring-2 focus:ring-blue-400 outline-none
-                resize-none
+                text-sm bg-white focus:ring-2 focus:ring-blue-400 outline-none resize-none
               "
             />
           )}
         </div>
 
-        {/* Bottom padding so FAB doesn't hide last item */}
         <div className="h-4" />
       </div>
 
-      {/* ── STICKY BOTTOM — cart + submit ─────────────── */}
+      {/* STICKY BOTTOM — cart + submit */}
       <div className="bg-white border-t px-4 pt-3 pb-5 shadow-lg">
 
-        {/* Selected items summary */}
         {itemCount > 0 && (
-          <div className="mb-3 max-h-32 overflow-y-auto space-y-1.5">
-            {Object.values(selected).map(item => (
-              <div key={item.id} className="flex items-center justify-between">
-                <span className="text-xs text-gray-600 flex-1 truncate">
-                  {item.name}
-                </span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => changeQty(item.id, -1)}
-                    className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200"
-                  >
-                    −
-                  </button>
-                  <span className="text-xs font-semibold w-4 text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => changeQty(item.id, 1)}
-                    className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200"
-                    disabled={item.quantity >= 8}
-                  >
-                    +
-                  </button>
-                  <span className="text-xs text-gray-500 w-16 text-right">
-                    ₱{(item.price * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-              </div>
+          <div className="mb-3 max-h-40 overflow-y-auto space-y-1.5">
+
+            {/* Service rows */}
+            {Object.values(selectedServices).map(item => (
+              <CartRow
+                key={item.id}
+                item={item}
+                onMinus={() => changeServiceQty(item.id, -1)}
+                onPlus={() => changeServiceQty(item.id, 1)}
+              />
+            ))}
+
+            {/* Addon rows — with a subtle separator if both lists are non-empty */}
+            {addonCount > 0 && serviceCount > 0 && (
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide pt-1">Add-ons</p>
+            )}
+            {Object.values(selectedAddons).map(item => (
+              <CartRow
+                key={item.id}
+                item={item}
+                onMinus={() => changeAddonQty(item.id, -1)}
+                onPlus={() => changeAddonQty(item.id, 1)}
+              />
             ))}
           </div>
         )}
@@ -308,9 +346,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <p className="text-xs text-gray-400">Total</p>
-            <p className="text-xl font-bold text-gray-900">
-              ₱{total.toFixed(2)}
-            </p>
+            <p className="text-xl font-bold text-gray-900">₱{total.toFixed(2)}</p>
           </div>
           <button
             onClick={handleSubmit}
@@ -318,8 +354,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
             className="
               h-12 px-6 rounded-xl font-semibold text-sm
               bg-blue-600 text-white
-              active:scale-[0.98] disabled:opacity-40 transition-transform
-              whitespace-nowrap
+              active:scale-[0.98] disabled:opacity-40 transition-transform whitespace-nowrap
             "
           >
             {submitting ? 'Creating…' : 'Complete Order'}
@@ -373,8 +408,7 @@ function ServiceTile({ service, qty, onTap, onMinus, onPlus }) {
     <button
       onClick={onTap}
       className={`
-        relative p-3 rounded-xl border text-left transition-all
-        active:scale-[0.97]
+        relative p-3 rounded-xl border text-left transition-all active:scale-[0.97]
         ${isSelected
           ? 'bg-blue-600 border-blue-600 text-white shadow-md'
           : 'bg-white border-gray-200 hover:border-blue-300'}
@@ -382,12 +416,10 @@ function ServiceTile({ service, qty, onTap, onMinus, onPlus }) {
     >
       <p className="text-sm font-semibold leading-tight pr-6">{service.name}</p>
       <p className={`text-xs mt-0.5 ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
-        ₱{service.price}
-        {atMax && isSelected ? ' · max' : ''}
+        ₱{service.price}{atMax && isSelected ? ' · max' : ''}
       </p>
 
-      {/* Quantity badge / stepper */}
-      {isSelected ? (
+      {isSelected && (
         <div
           className="absolute top-2 right-2 flex items-center gap-1"
           onClick={e => e.stopPropagation()}
@@ -407,7 +439,34 @@ function ServiceTile({ service, qty, onTap, onMinus, onPlus }) {
             +
           </button>
         </div>
-      ) : null}
+      )}
     </button>
+  )
+}
+
+function CartRow({ item, onMinus, onPlus }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-gray-600 flex-1 truncate">{item.name}</span>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onMinus}
+          className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200"
+        >
+          −
+        </button>
+        <span className="text-xs font-semibold w-4 text-center">{item.quantity}</span>
+        <button
+          onClick={onPlus}
+          disabled={item.quantity >= 8}
+          className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200 disabled:opacity-40"
+        >
+          +
+        </button>
+        <span className="text-xs text-gray-500 w-16 text-right">
+          ₱{(item.price * item.quantity).toFixed(2)}
+        </span>
+      </div>
+    </div>
   )
 }

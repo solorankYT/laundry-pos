@@ -39,7 +39,6 @@ export default function Orders() {
   const fetchOrders = async () => {
     setLoading(true)
 
-    // Fetch all for counts, filter in JS (avoids N+1 queries)
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(id, service_name, price, quantity)')
