@@ -156,7 +156,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
         if (itemsErr) throw itemsErr
       }
 
-      // 3. Insert order_addons (addons)
       if (addonCount > 0) {
         const addonRows = Object.values(selectedAddons).map(i => ({
           order_id: order.id,

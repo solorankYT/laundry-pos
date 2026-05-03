@@ -14,7 +14,6 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
   const [updating, setUpdating] = useState(false)
   const [visible, setVisible] = useState(false)
 
-  // Animate in
   useEffect(() => {
     if (order) requestAnimationFrame(() => setVisible(true))
     else setVisible(false)
@@ -27,7 +26,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
 
   const handleClose = () => {
     setVisible(false)
-    setTimeout(onClose, 260) // wait for slide-out
+    setTimeout(onClose, 260)
   }
 
   const handleAdvance = async () => {
@@ -44,6 +43,11 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
     setUpdating(false)
   }
 
+  // order_addons rows look like:
+  // { id, addon_id, quantity, unit_price, total, addons: { name } }
+  // Make sure your query does: .select('*, order_addons(*, addons(name))')
+  const orderAddons = order.order_addons ?? []
+
   return (
     <>
       {/* Backdrop */}
@@ -56,15 +60,12 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
         `}
       />
 
-      {/* Drawer — bottom sheet on mobile, right panel on md+ */}
+      {/* Drawer */}
       <div
         className={`
           fixed z-50 bg-white shadow-2xl flex flex-col
-
-          /* Mobile: bottom sheet */
           inset-x-0 bottom-0 rounded-t-2xl
           md:inset-y-0 md:right-0 md:left-auto md:w-[400px] md:rounded-none
-
           transition-transform duration-260 ease-out
           ${visible
             ? 'translate-y-0 md:translate-x-0'
@@ -72,12 +73,12 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
         `}
         style={{ maxHeight: '90vh' }}
       >
-        {/* Drag handle (mobile only) */}
+        {/* Drag handle (mobile) */}
         <div className="flex justify-center pt-3 pb-1 md:hidden">
           <div className="w-10 h-1 bg-gray-200 rounded-full" />
         </div>
 
-        {/* HEADER */}
+        {/* Header */}
         <div className="px-5 py-3 flex justify-between items-start border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2">
@@ -116,7 +117,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
             </span>
           </div>
 
-          {/* Order items */}
+          {/* Services */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
               Services
@@ -141,6 +142,34 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
             </div>
           </div>
 
+          {/* Add-ons — separate, sibling div to Services */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+              Add-ons
+            </p>
+            <div className="space-y-2">
+              {orderAddons.length > 0 ? orderAddons.map(addon => (
+                <div
+                  key={addon.id}
+                  className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0"
+                >
+                  <div>
+                    {/* addons.name comes from the joined addons table */}
+                    <p className="text-sm text-gray-900">{addon.addons?.name ?? 'Add-on'}</p>
+                    {addon.quantity > 1 && (
+                      <p className="text-xs text-gray-400">×{addon.quantity} @ ₱{addon.unit_price}</p>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    ₱{Number(addon.total).toFixed(2)}
+                  </p>
+                </div>
+              )) : (
+                <p className="text-sm text-gray-400">No add-ons</p>
+              )}
+            </div>
+          </div>
+
           {/* Total */}
           <div className="flex justify-between items-center bg-gray-50 rounded-xl px-4 py-3">
             <span className="font-semibold text-gray-700">Total</span>
@@ -160,7 +189,6 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
 
         {/* ACTIONS — sticky bottom */}
         <div className="px-5 pb-6 pt-3 border-t border-gray-100 space-y-2">
-          {/* Pay — show only if unpaid */}
           {!isPaid && (
             <button
               onClick={handlePay}
@@ -175,7 +203,6 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
             </button>
           )}
 
-          {/* Advance status */}
           {meta.next && (
             <button
               onClick={handleAdvance}

@@ -41,11 +41,10 @@ export default function Orders() {
 
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(id, service_name, price, quantity)')
+      .select('*, order_items(id, service_name, price, quantity), order_addons(id, quantity, unit_price, total, addons(name))')
       .order('created_at', { ascending: false })
 
     if (!error && data) {
-      // Compute per-tab counts
       const c = { all: data.length }
       TABS.forEach(t => {
         if (t.key !== 'all') c[t.key] = data.filter(o => o.status === t.key).length

@@ -45,7 +45,6 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
         flex flex-col gap-0 overflow-hidden
       `}
     >
-      {/* TOP ROW — customer + payment badge */}
       <div className="flex justify-between items-start px-4 pt-3 pb-1">
         <div className="flex-1 min-w-0 mr-3">
           <p className="font-semibold text-gray-900 text-sm leading-tight truncate">
