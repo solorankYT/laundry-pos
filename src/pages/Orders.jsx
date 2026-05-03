@@ -39,10 +39,14 @@ export default function Orders() {
   const fetchOrders = async () => {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(id, service_name, price, quantity), order_addons(id, quantity, unit_price, total, addons(name))')
-      .order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .from('orders_with_creator')
+    .select(`
+      *,
+      order_items(id, service_name, price, quantity),
+      order_addons(id, quantity, unit_price, total, addons(name))
+    `)
+    .order('created_at', { ascending: false })
 
     if (!error && data) {
       const c = { all: data.length }

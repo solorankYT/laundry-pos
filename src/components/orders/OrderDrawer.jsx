@@ -43,9 +43,6 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
     setUpdating(false)
   }
 
-  // order_addons rows look like:
-  // { id, addon_id, quantity, unit_price, total, addons: { name } }
-  // Make sure your query does: .select('*, order_addons(*, addons(name))')
   const orderAddons = order.order_addons ?? []
 
   return (
@@ -85,14 +82,15 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
               <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
               <span className="text-xs font-medium text-gray-500">{meta.label}</span>
             </div>
-            <h2 className="font-semibold text-gray-900 text-base mt-0.5">
+            <p className="font-semibold text-gray-900 text-base mt-0.5">
               {order.customer_name}
-            </h2>
+            </p>
             <p className="text-xs text-gray-400">
               {dayjs(order.created_at).format('MMM D, h:mm A')}
               <span className="mx-1">·</span>
               {dayjs(order.created_at).fromNow()}
             </p>
+           <p>Created by: {order.created_by_email}</p>
           </div>
 
           <button
