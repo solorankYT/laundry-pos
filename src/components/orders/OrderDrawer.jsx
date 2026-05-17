@@ -76,7 +76,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
         </div>
 
         {/* Header */}
-        <div className="px-5 py-3 flex justify-between items-start border-b border-gray-100">
+        <div className="px-5 py-3 flex justify-center  border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
@@ -93,13 +93,6 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
             </p>
            <p>Created by: {order.created_by_email}</p>
           </div>
-
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 active:bg-gray-200 text-sm"
-          >
-            ✕
-          </button>
         </div>
 
         {/* CONTENT — scrollable */}
