@@ -82,6 +82,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
               <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
               <span className="text-xs font-medium text-gray-500">{meta.label}</span>
             </div>
+            
             <p className="font-semibold text-gray-900 text-base mt-0.5">
               {order.customer_name}
             </p>
