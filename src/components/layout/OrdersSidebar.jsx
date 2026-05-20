@@ -1,7 +1,7 @@
 import { FiHome, FiLogOut, FiBox } from 'react-icons/fi';
 import { useAuth } from '../../hooks/useAuth';
 
-export default function OrdersSidebar({ isOpen, toggleSidebar }) {
+export default function OrdersSidebar({ isOpen }) {
   const { user, logout, role } = useAuth();
 
   const isAdmin = role === 'manager';
@@ -32,7 +32,7 @@ export default function OrdersSidebar({ isOpen, toggleSidebar }) {
             href="/dashboard"
             className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition"
           >
-            <FiHome /> Admin Dashboard
+            <FiHome /> Dashboard
           </a>
         )}
       </nav>

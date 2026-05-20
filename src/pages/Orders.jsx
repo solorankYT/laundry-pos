@@ -115,7 +115,7 @@ export default function Orders() {
         {/* ── PAGE HEADER ────────────────────────────── */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
           <button
-            className="md:hidden w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-700"
+            className="md:hidden w-9 h-9 flex items-center justify-center text-gray-700"
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
             <FiMenu size={18} />
