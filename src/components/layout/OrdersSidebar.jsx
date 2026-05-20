@@ -22,7 +22,7 @@ export default function OrdersSidebar({ isOpen }) {
       <nav className="flex flex-col gap-2 mb-6">
         <a
           href="/orders"
-          className="flex items-center gap-3 p-3 rounded-lg bg-blue-600 font-semibold"
+          className="flex items-center gap-3 p-3 rounded-lg"
         >
           <FiBox /> Orders
         </a>

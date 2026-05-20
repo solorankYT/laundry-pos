@@ -4,6 +4,7 @@ import KPICard from '../components/dashboard/KPICard';
 import OrdersOverview from '../components/dashboard/OrdersOverview';
 import UsersTable from '../components/dashboard/UsersTable';
 import { useState } from 'react';
+import OrdersSidebar from '../components/layout/OrdersSidebar';
 
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -11,7 +12,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen overflow-hidden">
 
-      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <OrdersSidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
       {sidebarOpen && (
         <div
@@ -20,7 +21,7 @@ export default function Dashboard() {
         />
       )}
 
-     <main className="flex-1 flex flex-col ml-0 p-4 overflow-y-auto">
+        <main className="flex-1 flex flex-col ml-0 p-4 overflow-y-auto">
             <div className="flex justify-end mb-4 md:hidden">
                 <button
                 className="p-2 rounded bg-gray-900 text-white"
@@ -32,12 +33,7 @@ export default function Dashboard() {
 
             <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <KPICard title="Total Revenue" value="₱45,000" />
-                <KPICard title="Total Orders" value="120" icon={<FiBox />} />
-                <KPICard title="Users" value="15" icon={<FiUsers />} />
-            </div>
-
+            
             <OrdersOverview />
             </main>
     </div>

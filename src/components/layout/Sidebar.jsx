@@ -1,13 +1,10 @@
 import { FiHome, FiUsers, FiBox, FiCreditCard, FiLogOut } from 'react-icons/fi';
-import { useState } from 'react';
 
-export default function Sidebar({ isOpen, toggleSidebar, activePage }) {
+
+export default function Sidebar({ isOpen, activePage }) {
   const links = [
     { name: 'Dashboard', icon: <FiHome />, href: '/dashboard' },
     { name: 'Orders', icon: <FiBox />, href: '/orders' },
-    { name: 'Users', icon: <FiUsers />, href: '/users' },
-    { name: 'Services', icon: <FiBox />, href: '/services' },
-    { name: 'Payments', icon: <FiCreditCard />, href: '/payments' },
   ];
 
   return (

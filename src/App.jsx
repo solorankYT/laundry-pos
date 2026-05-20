@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
 import Orders from './pages/Orders'
 import Dashboard from './pages/Dashboard'
+import User from './pages/User'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -40,6 +41,10 @@ export default function App() {
 
         <Route path="/orders" element={
           <ProtectedRoute><Orders /></ProtectedRoute>
+        } />
+
+        <Route path="/users" element={
+          <ManagerRoute><User /></ManagerRoute>
         } />
 
         <Route path="/dashboard" element={
