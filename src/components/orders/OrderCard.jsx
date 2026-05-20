@@ -81,6 +81,8 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
           className="flex gap-2 px-3 pb-3 pt-1"
           onClick={e => e.stopPropagation()}
         >
+
+
           {/* Pay button — only when unpaid */}
           {!isPaid && (
             <button
@@ -96,11 +98,11 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
             </button>
           )}
 
-          {/* Advance status — primary CTA */}
+          {/* Advance status — primary CTA */}  
           {meta.next && (
             <button
               onClick={handleAdvance}
-              disabled={updating}
+              disabled={updating || (meta.next === 'released' && !isPaid)}
               className="
                 flex-1 h-11 rounded-lg text-xs font-semibold
                 bg-blue-600 text-white
@@ -110,6 +112,8 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
               {updating ? '…' : meta.nextLabel}
             </button>
           )}
+
+
         </div>
       )}
 

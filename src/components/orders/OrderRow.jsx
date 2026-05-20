@@ -100,11 +100,12 @@ export default function OrderRow({ order, onClick, onUpdateStatus, onMarkPaid, i
         {advance && (
           <ActionBtn
             label={updating ? '…' : advance.label}
-            disabled={updating}
+            disabled={updating || (advance.next === 'released' && !isPaid)}
             className="bg-blue-600 text-white hover:bg-blue-700"
             onClick={handleAdvance}
           />
         )}
+
         {order.status === 'released' && isPaid && (
           <span className="text-xs text-gray-400">Done</span>
         )}
