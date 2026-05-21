@@ -224,7 +224,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
           {meta.next && (
             <button
               onClick={openAdvanceConfirm}
-              disabled={updating}
+              disabled={updating || (meta.next === 'released' && !isPaid)}
               className="
                 w-full h-12 rounded-xl font-semibold text-sm
                 bg-blue-600 text-white
@@ -232,14 +232,20 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
               "
             >
               {updating ? 'Updating…' : meta.nextLabel}
+              
             </button>
           )}
 
-          {order.status === 'released' && (
-            <div className="text-center text-sm text-gray-400 py-1">
-              ✓ Order completed & released
-            </div>
+
+         {isPaid && meta.next === 'released' && (
+                <span className="text-center text-xs text-gray-400 pb-3 pt-1">Completed</span>
           )}
+
+        {order.status === 'done' && isPaid === false && (
+        <p className="text-center text-xs text-gray-400 pb-3 pt-1">
+         please mark us unpaid first to release.
+        </p>
+      )}
         </div>
       </div>
 

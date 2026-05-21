@@ -141,6 +141,7 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
               "
             >
               {updating ? '…' : meta.nextLabel}
+             
             </button>
           )}
 
@@ -148,9 +149,13 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
         </div>
       )}
 
-      {order.status === 'released' && (
+       {isPaid && order.status === 'released' && (
+    <span className="text-center text-xs text-gray-400 pb-3 pt-1">Completed</span>
+      )}
+
+      {order.status === 'done' && isPaid === false && (
         <p className="text-center text-xs text-gray-400 pb-3 pt-1">
-          ✓ Completed
+         please mark us unpaid first to release.
         </p>
       )}
 
@@ -169,9 +174,6 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
       </>
  
   )
-
-
-  
 
 }
 
