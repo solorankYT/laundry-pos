@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import Modal from 'react-modal';
+import ConfirmModal from '../ui/ConfirmModal';
 
 dayjs.extend(relativeTime)
 
@@ -12,6 +14,10 @@ const STATUS_META = {
 
 export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }) {
   const [updating, setUpdating] = useState(false)
+  const [isConfirmActionOpen, setIsConfirmActionOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmMessage, setConfirmMessage] = useState('')
+
 
   const meta = STATUS_META[order.status] ?? STATUS_META.pending
   const isPaid = order.payment_status
@@ -20,8 +26,26 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
     ?.map(i => i.quantity > 1 ? `${i.service_name} ` : i.service_name)
     .join(' · ') || '—'
 
-  const handleAdvance = async (e) => {
-    e.stopPropagation()
+    const openAdvanceConfirm = (e) => {
+      e.stopPropagation()
+      setConfirmMessage(
+        meta.next === 'released'
+          ? 'Release this order to the customer?'
+          : 'Mark this order as done?'
+      )
+      setConfirmAction(() => handleAdvance)
+      setIsConfirmActionOpen(true)
+    }
+
+    const openPayConfirm = (e) => {
+      e.stopPropagation()
+      setConfirmMessage('Mark this order as paid?')
+      setConfirmAction(() => handlePay)
+      setIsConfirmActionOpen(true)
+    }
+
+  const handleAdvance = async () => {
+    setIsConfirmActionOpen(false)
     if (!meta.next || updating) return
     setUpdating(true)
     await onUpdateStatus(order.id, meta.next)
@@ -30,13 +54,16 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
 
   const handlePay = async (e) => {
     e.stopPropagation()
+     setIsConfirmActionOpen(false)
     if (updating) return
     setUpdating(true)
     await onMarkPaid(order.id)
+   
     setUpdating(false)
   }
 
   return (
+    <>
     <div
       onClick={onClick}
       className={`
@@ -75,18 +102,22 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
         </p>
       </div>
 
+
+
       {/* BOTTOM ROW — actions */}
+
+
+
       {order.status !== 'released' && (
         <div
           className="flex gap-2 px-3 pb-3 pt-1"
           onClick={e => e.stopPropagation()}
         >
 
-
           {/* Pay button — only when unpaid */}
           {!isPaid && (
             <button
-              onClick={handlePay}
+              onClick={openPayConfirm}
               disabled={updating}
               className="
                 flex-1 h-11 rounded-lg text-xs font-semibold
@@ -98,10 +129,10 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
             </button>
           )}
 
-          {/* Advance status — primary CTA */}  
+
           {meta.next && (
             <button
-              onClick={handleAdvance}
+              onClick={openAdvanceConfirm}
               disabled={updating || (meta.next === 'released' && !isPaid)}
               className="
                 flex-1 h-11 rounded-lg text-xs font-semibold
@@ -122,6 +153,27 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
           ✓ Completed
         </p>
       )}
-    </div>
+
+ </div>
+
+      <div>
+        {isConfirmActionOpen && (
+          <ConfirmModal
+            isOpen={isConfirmActionOpen}
+            message={confirmMessage}
+            onConfirm={confirmAction}
+            onCancel={() => setIsConfirmActionOpen(false)}
+          />
+        )}
+      </div>
+      </>
+ 
   )
+
+
+  
+
 }
+
+
+     

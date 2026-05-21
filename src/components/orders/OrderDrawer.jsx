@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import ConfirmModal from '../ui/ConfirmModal';
 
 dayjs.extend(relativeTime)
 
@@ -13,6 +14,9 @@ const STATUS_CONFIG = {
 export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid }) {
   const [updating, setUpdating] = useState(false)
   const [visible, setVisible] = useState(false)
+  const [isConfirmActionOpen, setIsConfirmActionOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmMessage, setConfirmMessage] = useState('')
 
   useEffect(() => {
     if (order) requestAnimationFrame(() => setVisible(true))
@@ -29,17 +33,39 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
     setTimeout(onClose, 260)
   }
 
+ const openAdvanceConfirm = (e) => {
+      e.stopPropagation()
+      setConfirmMessage(
+        meta.next === 'released'
+          ? 'Release this order to the customer?'
+          : 'Mark this order as done?'
+      )
+      setConfirmAction(() => handleAdvance)
+      setIsConfirmActionOpen(true)
+    }
+
+    const openPayConfirm = (e) => {
+      e.stopPropagation()
+      setConfirmMessage('Mark this order as paid?')
+      setConfirmAction(() => handlePay)
+      setIsConfirmActionOpen(true)
+    }
+
   const handleAdvance = async () => {
+    setIsConfirmActionOpen(false)
     if (!meta.next || updating) return
     setUpdating(true)
     await onUpdateStatus(order.id, meta.next)
     setUpdating(false)
   }
 
-  const handlePay = async () => {
+  const handlePay = async (e) => {
+    e.stopPropagation()
+     setIsConfirmActionOpen(false)
     if (updating) return
     setUpdating(true)
     await onMarkPaid(order.id)
+   
     setUpdating(false)
   }
 
@@ -215,6 +241,15 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
             </div>
           )}
         </div>
+      </div>
+
+      <div>
+        <ConfirmModal
+          isOpen={isConfirmActionOpen}
+          message={confirmMessage}
+          onConfirm={confirmAction}
+          onCancel={() => setIsConfirmActionOpen(false)}
+        />
       </div>
     </>
   )
