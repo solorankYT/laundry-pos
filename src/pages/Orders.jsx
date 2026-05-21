@@ -86,13 +86,15 @@ export default function Orders() {
     if (status === 'released') setSelectedOrder(null)
 
     const { error } = await supabase.from('orders').update({ status }).eq('id', id)
-    if (error) fetchOrders()
+     fetchOrders()
+
+      
   }
 
   const markPaid = async (id) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, payment_status: true } : o))
     const { error } = await supabase.from('orders').update({ payment_status: true }).eq('id', id)
-    if (error) fetchOrders()
+     fetchOrders()
   }
 
   return (
