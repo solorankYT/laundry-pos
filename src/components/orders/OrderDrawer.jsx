@@ -209,7 +209,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
         <div className="px-5 pb-6 pt-3 border-t border-gray-100 space-y-2">
           {!isPaid && (
             <button
-              onClick={handlePay}
+              onClick={openPayConfirm}
               disabled={updating}
               className="
                 w-full h-12 rounded-xl font-semibold text-sm
@@ -223,7 +223,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
 
           {meta.next && (
             <button
-              onClick={handleAdvance}
+              onClick={openAdvanceConfirm}
               disabled={updating}
               className="
                 w-full h-12 rounded-xl font-semibold text-sm
