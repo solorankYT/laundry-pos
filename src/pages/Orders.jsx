@@ -42,7 +42,7 @@ export default function Orders() {
     setLoading(true)
 
     const { data, error } = await supabase
-      .from('orders_with_creator')
+      .from('orders')
       .select(`
         *,
         order_items(id, service_name, price, quantity),
