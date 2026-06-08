@@ -127,7 +127,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setErrors({})
 
     try {
-      // 1. Create the order
       const { data: order, error: orderErr } = await supabase
         .from('orders')
         .insert({
@@ -137,13 +136,13 @@ export default function NewOrderForm({ onClose, onCreated }) {
           total,
           created_by: user.id,
           status: 'pending',
+          created_by_email: user.email,
         })
         .select()
         .single()
 
       if (orderErr) throw orderErr
 
-      // 2. Insert order_items (services)
       if (serviceCount > 0) {
         const items = Object.values(selectedServices).map(i => ({
           order_id: order.id,
@@ -163,6 +162,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
           quantity: i.quantity,
           unit_price: i.price,
           total: i.price * i.quantity,
+
         }))
         const { error: addonsErr } = await supabase.from('order_addons').insert(addonRows)
         if (addonsErr) throw addonsErr
@@ -176,7 +176,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
     }
   }
 
-  // ── Render ───────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-50">
 
