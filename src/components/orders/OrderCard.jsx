@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import Modal from 'react-modal';
 import ConfirmModal from '../ui/ConfirmModal';
 
 dayjs.extend(relativeTime)

@@ -88,7 +88,7 @@ export default function OrderDrawer({ order, onClose, onUpdateStatus, onMarkPaid
         className={`
           fixed z-50 bg-white shadow-2xl flex flex-col
           inset-x-0 bottom-0 rounded-t-2xl
-          md:inset-y-0 md:right-0 md:left-auto md:w-[400px] md:rounded-none
+          md:inset-y-0 md:right-0 md:left-auto md:rounded-none
           transition-transform duration-260 ease-out
           ${visible
             ? 'translate-y-0 md:translate-x-0'
