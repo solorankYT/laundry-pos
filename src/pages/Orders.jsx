@@ -123,12 +123,12 @@ export default function Orders() {
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
 
           {/* Mobile menu button */}
-          <button
+          {/* <button
             className="md:hidden w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 shrink-0"
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
             <FiMenu size={18} />
-          </button>
+          </button> */}
 
           {/* Search bar — takes up all remaining space */}
           <div className="flex-1 relative">

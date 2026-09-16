@@ -22,7 +22,7 @@ export default function AppLayout({ children }) {
         {/* LOGO / TITLE */}
         <h1 className="text-lg font-semibold mb-6">Laundry POS</h1>
 
-        {/* NAV */}
+        NAV
         <nav className="flex flex-col gap-2">
           {navItems.map(item => {
             if (item.admin && !user?.is_admin) return null
