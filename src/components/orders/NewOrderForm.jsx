@@ -1,6 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import {
+  X,
+  Zap,
+  Plus,
+  Minus,
+  NotebookPen,
+  CheckCircle2,
+  CircleDollarSign,
+} from 'lucide-react'
 
 export default function NewOrderForm({ onClose, onCreated }) {
   const { user } = useAuth()
@@ -11,7 +20,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
   const [selectedServices, setSelectedServices] = useState({})
   const [selectedAddons, setSelectedAddons] = useState({})
   const [customerName, setCustomerName] = useState('')
-  const [paymentStatus, setPaymentStatus] = useState(true)
+  const [paymentStatus, setPaymentStatus] = useState(null)
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -28,6 +37,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
       supabase.from('services').select('*').eq('is_active', true).order('name'),
       supabase.from('addons').select('*').eq('is_active', true).order('name'),
     ])
+
     setServices(svcData ?? [])
     setAddons(addonData ?? [])
   }
@@ -38,9 +48,23 @@ export default function NewOrderForm({ onClose, onCreated }) {
       if (prev[service.id]) {
         const qty = prev[service.id].quantity
         if (qty >= 8) return prev
-        return { ...prev, [service.id]: { ...prev[service.id], quantity: qty + 1 } }
+
+        return {
+          ...prev,
+          [service.id]: {
+            ...prev[service.id],
+            quantity: qty + 1,
+          },
+        }
       }
-      return { ...prev, [service.id]: { ...service, quantity: 1 } }
+
+      return {
+        ...prev,
+        [service.id]: {
+          ...service,
+          quantity: 1,
+        },
+      }
     })
   }
 
@@ -48,25 +72,48 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setSelectedServices(prev => {
       const item = prev[id]
       if (!item) return prev
+
       const qty = item.quantity + delta
+
       if (qty <= 0) {
         const copy = { ...prev }
         delete copy[id]
         return copy
       }
-      return { ...prev, [id]: { ...item, quantity: Math.min(qty, 8) } }
+
+      return {
+        ...prev,
+        [id]: {
+          ...item,
+          quantity: Math.min(qty, 8),
+        },
+      }
     })
   }
 
-  // ── Addon helpers ────────────────────────────────────
+  // ── Addon helpers ─────────────────────────────────────
   const toggleAddon = (addon) => {
     setSelectedAddons(prev => {
       if (prev[addon.id]) {
         const qty = prev[addon.id].quantity
         if (qty >= 8) return prev
-        return { ...prev, [addon.id]: { ...prev[addon.id], quantity: qty + 1 } }
+
+        return {
+          ...prev,
+          [addon.id]: {
+            ...prev[addon.id],
+            quantity: qty + 1,
+          },
+        }
       }
-      return { ...prev, [addon.id]: { ...addon, quantity: 1 } }
+
+      return {
+        ...prev,
+        [addon.id]: {
+          ...addon,
+          quantity: 1,
+        },
+      }
     })
   }
 
@@ -74,54 +121,93 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setSelectedAddons(prev => {
       const item = prev[id]
       if (!item) return prev
+
       const qty = item.quantity + delta
+
       if (qty <= 0) {
         const copy = { ...prev }
         delete copy[id]
         return copy
       }
-      return { ...prev, [id]: { ...item, quantity: Math.min(qty, 8) } }
+
+      return {
+        ...prev,
+        [id]: {
+          ...item,
+          quantity: Math.min(qty, 8),
+        },
+      }
     })
   }
 
-  // ── Full service preset ─────────────────────────────
-  // Finds services whose name contains wash, dry, or fold and adds 1 of each
+  // ── Full service preset ──────────────────────────────
   const applyPreset = () => {
     const keywords = ['wash', 'dry', 'fold']
+
     setSelectedServices(prev => {
       const updated = { ...prev }
+
       keywords.forEach(keyword => {
-        const svc = services.find(s => s.name.toLowerCase().includes(keyword))
+        const svc = services.find(s =>
+          s.name.toLowerCase().includes(keyword)
+        )
+
         if (!svc) return
+
         if (updated[svc.id]) {
-          updated[svc.id] = { ...updated[svc.id], quantity: Math.min(updated[svc.id].quantity + 1, 8) }
+          updated[svc.id] = {
+            ...updated[svc.id],
+            quantity: Math.min(updated[svc.id].quantity + 1, 8),
+          }
         } else {
-          updated[svc.id] = { ...svc, quantity: 1 }
+          updated[svc.id] = {
+            ...svc,
+            quantity: 1,
+          }
         }
       })
+
       return updated
     })
   }
 
-  // ── Totals ───────────────────────────────────────────
+  // ── Totals ────────────────────────────────────────────
   const serviceTotal = Object.values(selectedServices).reduce(
-    (sum, i) => sum + i.price * i.quantity, 0
+    (sum, i) => sum + i.price * i.quantity,
+    0
   )
+
   const addonTotal = Object.values(selectedAddons).reduce(
-    (sum, i) => sum + i.price * i.quantity, 0
+    (sum, i) => sum + i.price * i.quantity,
+    0
   )
+
   const total = serviceTotal + addonTotal
 
-  const serviceCount = Object.values(selectedServices).reduce((sum, i) => sum + i.quantity, 0)
-  const addonCount = Object.values(selectedAddons).reduce((sum, i) => sum + i.quantity, 0)
+  const serviceCount = Object.values(selectedServices).reduce(
+    (sum, i) => sum + i.quantity,
+    0
+  )
+
+  const addonCount = Object.values(selectedAddons).reduce(
+    (sum, i) => sum + i.quantity,
+    0
+  )
+
   const itemCount = serviceCount + addonCount
 
-  // ── Submit ───────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────
   const handleSubmit = async () => {
     const errs = {}
+
     if (!customerName.trim()) errs.name = 'Enter customer name'
     if (!itemCount) errs.services = 'Select at least one service'
-    if (Object.keys(errs).length) { setErrors(errs); return }
+    if (paymentStatus === null) errs.payment = 'Select payment status'
+
+    if (Object.keys(errs).length) {
+      setErrors(errs)
+      return
+    }
 
     setSubmitting(true)
     setErrors({})
@@ -151,7 +237,11 @@ export default function NewOrderForm({ onClose, onCreated }) {
           price: i.price,
           quantity: i.quantity,
         }))
-        const { error: itemsErr } = await supabase.from('order_items').insert(items)
+
+        const { error: itemsErr } = await supabase
+          .from('order_items')
+          .insert(items)
+
         if (itemsErr) throw itemsErr
       }
 
@@ -162,197 +252,437 @@ export default function NewOrderForm({ onClose, onCreated }) {
           quantity: i.quantity,
           unit_price: i.price,
           total: i.price * i.quantity,
-
         }))
-        const { error: addonsErr } = await supabase.from('order_addons').insert(addonRows)
+
+        const { error: addonsErr } = await supabase
+          .from('order_addons')
+          .insert(addonRows)
+
         if (addonsErr) throw addonsErr
       }
 
       onCreated()
     } catch (err) {
       console.error(err)
-      setErrors({ submit: 'Failed to create order. Try again.' })
+      setErrors({
+        submit: 'Failed to create order. Try again.',
+      })
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gray-50">
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-50">
 
       {/* HEADER */}
-      <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 text-sm active:bg-gray-200"
-        >
-          ✕
-        </button>
-        <h2 className="font-semibold text-base text-gray-900 flex-1">New Order</h2>
-        {itemCount > 0 && (
-          <span className="text-xs font-semibold bg-blue-600 text-white px-2 py-0.5 rounded-full">
-            {itemCount} item{itemCount > 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
+      <header className="shrink-0 bg-white border-b border-neutral-200 px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close new order"
+            className="
+              w-10 h-10 shrink-0
+              flex items-center justify-center
+              rounded-lg
+              bg-neutral-100 text-neutral-600
+              hover:bg-neutral-200
+              focus:outline-none focus:ring-2 focus:ring-blue-200
+              active:scale-95
+              transition
+            "
+          >
+            <X size={19} strokeWidth={2} />
+          </button>
 
-      {/* STICKY TOP — customer + payment */}
-      <div className="bg-white border-b px-4 py-3 space-y-2.5">
-        <div>
-          <input
-            ref={nameRef}
-            type="text"
-            placeholder="Customer name *"
-            value={customerName}
-            onChange={e => { setCustomerName(e.target.value); setErrors(p => ({ ...p, name: null })) }}
-            className={`
-              w-full h-11 px-3 rounded-xl border text-sm bg-gray-50
-              focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none transition
-              ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-200'}
-            `}
-          />
-          {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+          <h2 className="flex-1 text-lg font-semibold text-neutral-900">
+            New Order
+          </h2>
+
+          {itemCount > 0 && (
+            <span className="
+              shrink-0
+              rounded-full
+              bg-blue-50
+              border border-blue-100
+              px-2.5 py-1
+              text-xs font-semibold text-blue-700
+              tabular-nums
+            ">
+              {itemCount} item{itemCount > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
+      </header>
 
-        <div className="flex gap-2">
-          <PayToggle
-            label="Paid"
-            active={paymentStatus === true}
-            activeClass="bg-green-600 text-white border-green-600"
-            onClick={() => setPaymentStatus(true)}
-          />
-          <PayToggle
-            label="Unpaid"
-            active={paymentStatus === false}
-            activeClass="bg-red-500 text-white border-red-500"
-            onClick={() => setPaymentStatus(false)}
-          />
+      {/* CUSTOMER + PAYMENT */}
+      <section className="shrink-0 bg-white border-b border-neutral-200 px-4 py-4">
+        <div className="space-y-4">
+
+          {/* Customer */}
+          <div>
+            <label
+              htmlFor="customer-name"
+              className="block mb-2 text-xs font-semibold text-neutral-500"
+            >
+              CUSTOMER NAME
+            </label>
+
+            <input
+              id="customer-name"
+              ref={nameRef}
+              type="text"
+              placeholder="Enter customer name"
+              value={customerName}
+              onChange={e => {
+                setCustomerName(e.target.value)
+                setErrors(p => ({ ...p, name: null }))
+              }}
+              className={`
+                w-full h-12 px-4
+                rounded-lg
+                border
+                text-sm
+                text-neutral-900
+                placeholder:text-neutral-400
+                bg-neutral-50
+                outline-none
+                transition
+                focus:bg-white
+                focus:ring-2
+                focus:ring-blue-100
+                focus:border-blue-400
+                ${errors.name
+                  ? 'border-red-400 bg-red-50 focus:border-red-400 focus:ring-red-100'
+                  : 'border-neutral-200'}
+              `}
+            />
+
+            {errors.name && (
+              <p className="mt-1.5 text-xs text-red-500">
+                {errors.name}
+              </p>
+            )}
+          </div>
+
+          {/* Payment */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold tracking-wide text-neutral-500">
+                PAYMENT STATUS
+              </p>
+
+              <span className="text-[11px] text-neutral-400">
+                Required
+              </span>
+            </div>
+
+            <div className="flex gap-3">
+              <PayToggle
+                label="Paid"
+                icon={CheckCircle2}
+                active={paymentStatus === true}
+                activeClass="bg-green-600 text-white border-green-600"
+                hasError={!!errors.payment}
+                onClick={() => {
+                  setPaymentStatus(true)
+                  setErrors(p => ({ ...p, payment: null }))
+                }}
+              />
+
+              <PayToggle
+                label="Unpaid"
+                icon={CircleDollarSign}
+                active={paymentStatus === false}
+                activeClass="bg-red-500 text-white border-red-500"
+                hasError={!!errors.payment}
+                onClick={() => {
+                  setPaymentStatus(false)
+                  setErrors(p => ({ ...p, payment: null }))
+                }}
+              />
+            </div>
+
+            {errors.payment && (
+              <p className="mt-1.5 text-xs text-red-500">
+                {errors.payment}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* SCROLLABLE — services + addons */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      {/* SCROLLABLE CONTENT */}
+      <main className="
+        flex-1
+        min-h-0
+        overflow-y-auto
+        overscroll-contain
+        px-4
+        py-5
+        space-y-5
+        pb-8
+      ">
 
-        {/* Quick preset */}
+        {/* QUICK PRESET */}
         <button
+          type="button"
           onClick={applyPreset}
           className="
-            w-full h-12 rounded-xl
-            bg-blue-50 border border-blue-200 text-blue-700
+            w-full
+            min-h-[54px]
+            px-4
+            py-3
+            rounded-lg
+            flex items-center justify-center gap-2.5
+            bg-blue-50
+            border border-blue-200
+            text-blue-700
             text-sm font-semibold
-            active:scale-[0.98] transition-transform
+            hover:bg-blue-100
+            focus:outline-none focus:ring-2 focus:ring-blue-200
+            active:scale-[0.99]
+            transition
           "
         >
-          ⚡ Full Service — Wash + Dry + Fold
+          <span className="
+            w-7 h-7
+            rounded-md
+            bg-blue-100
+            flex items-center justify-center
+            shrink-0
+          ">
+            <Zap size={16} strokeWidth={2.2} />
+          </span>
+
+          <span>Quick add: Wash, Dry &amp; Fold</span>
         </button>
 
-        {/* Services */}
+        {/* SERVICES */}
         {services.length > 0 && (
-          <Section title="Services" error={errors.services}>
-            <div className="grid grid-cols-2 gap-2.5">
+          <Section
+            title="Services"
+            error={errors.services}
+          >
+            <div className="grid grid-cols-2 gap-3">
               {services.map(s => (
                 <ServiceTile
                   key={s.id}
                   service={s}
                   qty={selectedServices[s.id]?.quantity ?? 0}
                   onTap={() => toggleService(s)}
-                  onMinus={e => { e.stopPropagation(); changeServiceQty(s.id, -1) }}
-                  onPlus={e => { e.stopPropagation(); changeServiceQty(s.id, 1) }}
+                  onMinus={e => {
+                    e.stopPropagation()
+                    changeServiceQty(s.id, -1)
+                  }}
+                  onPlus={e => {
+                    e.stopPropagation()
+                    changeServiceQty(s.id, 1)
+                  }}
                 />
               ))}
             </div>
           </Section>
         )}
 
-        {/* Add-ons */}
+        {/* ADD-ONS */}
         {addons.length > 0 && (
           <Section title="Add-ons">
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               {addons.map(a => (
                 <ServiceTile
                   key={a.id}
                   service={a}
                   qty={selectedAddons[a.id]?.quantity ?? 0}
                   onTap={() => toggleAddon(a)}
-                  onMinus={e => { e.stopPropagation(); changeAddonQty(a.id, -1) }}
-                  onPlus={e => { e.stopPropagation(); changeAddonQty(a.id, 1) }}
+                  onMinus={e => {
+                    e.stopPropagation()
+                    changeAddonQty(a.id, -1)
+                  }}
+                  onPlus={e => {
+                    e.stopPropagation()
+                    changeAddonQty(a.id, 1)
+                  }}
                 />
               ))}
             </div>
           </Section>
         )}
 
-        {/* Notes */}
+        {/* NOTES */}
         <div>
           <button
+            type="button"
             onClick={() => setShowNotes(p => !p)}
-            className="text-xs text-blue-600 font-medium"
+            className="
+              min-h-11
+              flex items-center gap-2
+              px-1
+              text-sm
+              text-blue-600
+              font-semibold
+              focus:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-blue-200
+              rounded-md
+            "
           >
-            {showNotes ? '− Hide notes' : '+ Add note'}
+            <NotebookPen size={16} />
+            <span>{showNotes ? 'Hide note' : 'Add note'}</span>
           </button>
+
           {showNotes && (
             <textarea
-              placeholder="Special instructions…"
+              placeholder="Special instructions..."
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
               className="
-                mt-2 w-full px-3 py-2 rounded-xl border border-gray-200
-                text-sm bg-white focus:ring-2 focus:ring-blue-400 outline-none resize-none
+                mt-2
+                w-full
+                min-h-[96px]
+                px-4 py-3
+                rounded-lg
+                border border-neutral-200
+                text-sm
+                text-neutral-900
+                placeholder:text-neutral-400
+                bg-white
+                outline-none
+                resize-none
+                focus:ring-2
+                focus:ring-blue-100
+                focus:border-blue-400
+                transition
               "
             />
           )}
         </div>
 
+        {/* Extra bottom room so the sticky checkout never covers content */}
         <div className="h-4" />
-      </div>
+      </main>
 
-      {/* STICKY BOTTOM — cart + submit */}
-      <div className="bg-white border-t px-4 pt-3 pb-5 shadow-lg">
+      {/* STICKY BOTTOM CHECKOUT */}
+      <footer className="
+        shrink-0
+        bg-white
+        border-t border-neutral-200
+        px-4
+        pt-4
+        pb-[max(1rem,env(safe-area-inset-bottom))]
+      ">
 
         {itemCount > 0 && (
-          <div className="mb-3 max-h-40 overflow-y-auto space-y-1.5">
+          <div className="mb-4">
 
-            {/* Service rows */}
-            {Object.values(selectedServices).map(item => (
-              <CartRow
-                key={item.id}
-                item={item}
-                onMinus={() => changeServiceQty(item.id, -1)}
-                onPlus={() => changeServiceQty(item.id, 1)}
-              />
-            ))}
+            {/* Cart */}
+            <div className="
+              max-h-40
+              overflow-y-auto
+              overscroll-contain
+              space-y-2
+              pr-0.5
+            ">
+              {Object.values(selectedServices).map(item => (
+                <CartRow
+                  key={item.id}
+                  item={item}
+                  onMinus={() => changeServiceQty(item.id, -1)}
+                  onPlus={() => changeServiceQty(item.id, 1)}
+                />
+              ))}
 
-            {/* Addon rows — with a subtle separator if both lists are non-empty */}
-            {addonCount > 0 && serviceCount > 0 && (
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide pt-1">Add-ons</p>
-            )}
-            {Object.values(selectedAddons).map(item => (
-              <CartRow
-                key={item.id}
-                item={item}
-                onMinus={() => changeAddonQty(item.id, -1)}
-                onPlus={() => changeAddonQty(item.id, 1)}
-              />
-            ))}
+              {addonCount > 0 && serviceCount > 0 && (
+                <p className="
+                  text-[10px]
+                  font-semibold
+                  text-neutral-400
+                  uppercase
+                  tracking-wide
+                  pt-1
+                ">
+                  Add-ons
+                </p>
+              )}
+
+              {Object.values(selectedAddons).map(item => (
+                <CartRow
+                  key={item.id}
+                  item={item}
+                  onMinus={() => changeAddonQty(item.id, -1)}
+                  onPlus={() => changeAddonQty(item.id, 1)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
         {errors.submit && (
-          <p className="text-red-500 text-xs mb-2 text-center">{errors.submit}</p>
+          <p className="
+            text-red-500
+            text-xs
+            mb-3
+            text-center
+            font-medium
+          ">
+            {errors.submit}
+          </p>
         )}
 
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <p className="text-xs text-gray-400">Total</p>
-            <p className="text-xl font-bold text-gray-900">₱{total.toFixed(2)}</p>
+        <div className="flex items-center gap-4">
+
+          {/* Total */}
+          <div className="min-w-0 flex-1">
+            <p className="
+              text-xs
+              font-medium
+              text-neutral-400
+              mb-0.5
+            ">
+              TOTAL
+            </p>
+
+            <p className="
+              text-2xl
+              leading-none
+              font-bold
+              text-neutral-900
+              tabular-nums
+              tracking-tight
+            ">
+              ₱{total.toFixed(2)}
+            </p>
           </div>
+
+          {/* Complete */}
           <button
+            type="button"
             onClick={handleSubmit}
-            disabled={submitting || !itemCount || !customerName.trim()}
+            disabled={
+              submitting ||
+              !itemCount ||
+              !customerName.trim() ||
+              paymentStatus === null
+            }
             className="
-              h-12 px-6 rounded-xl font-semibold text-sm
-              bg-blue-600 text-white
-              active:scale-[0.98] disabled:opacity-40 transition-transform whitespace-nowrap
+              min-h-[54px]
+              px-5
+              rounded-lg
+              bg-blue-600
+              text-white
+              font-semibold
+              text-sm
+              whitespace-nowrap
+              flex items-center justify-center
+              focus:outline-none
+              focus:ring-2
+              focus:ring-blue-200
+              focus:ring-offset-2
+              active:scale-[0.98]
+              disabled:opacity-40
+              disabled:cursor-not-allowed
+              transition
             "
           >
             {submitting ? 'Creating…' : 'Complete Order'}
@@ -360,11 +690,16 @@ export default function NewOrderForm({ onClose, onCreated }) {
         </div>
 
         {!itemCount && (
-          <p className="text-center text-xs text-gray-400 mt-2">
+          <p className="
+            text-center
+            text-xs
+            text-neutral-400
+            mt-2.5
+          ">
             Tap a service above to add it
           </p>
         )}
-      </div>
+      </footer>
     </div>
   )
 }
@@ -373,95 +708,314 @@ export default function NewOrderForm({ onClose, onCreated }) {
 
 function Section({ title, error, children }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</p>
-        {error && <p className="text-red-500 text-xs">{error}</p>}
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <p className="
+          text-xs
+          font-semibold
+          tracking-wide
+          uppercase
+          text-neutral-500
+        ">
+          {title}
+        </p>
+
+        {error && (
+          <p className="text-xs text-red-500 font-medium">
+            {error}
+          </p>
+        )}
       </div>
+
       {children}
-    </div>
+    </section>
   )
 }
 
-function PayToggle({ label, active, activeClass, onClick }) {
+function PayToggle({
+  label,
+  icon: Icon,
+  active,
+  activeClass,
+  hasError,
+  onClick,
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`
-        flex-1 h-10 rounded-xl border text-sm font-semibold transition
-        ${active ? activeClass : 'bg-white text-gray-600 border-gray-200'}
+        flex-1
+        min-h-[50px]
+        px-4
+        rounded-lg
+        border
+        text-sm
+        font-semibold
+        flex items-center justify-center gap-2
+        focus:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-blue-200
+        active:scale-[0.99]
+        transition
+        ${active
+          ? activeClass
+          : hasError
+            ? 'bg-white text-neutral-600 border-red-300'
+            : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}
       `}
     >
+      <Icon
+        size={18}
+        strokeWidth={2.2}
+        className={active ? '' : 'text-neutral-400'}
+      />
+
       {label}
     </button>
   )
 }
 
-function ServiceTile({ service, qty, onTap, onMinus, onPlus }) {
+function ServiceTile({
+  service,
+  qty,
+  onTap,
+  onMinus,
+  onPlus,
+}) {
   const isSelected = qty > 0
   const atMax = qty >= 8
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onTap}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onTap()
+        }
+      }}
+      aria-pressed={isSelected}
       className={`
-        relative p-3 rounded-xl border text-left transition-all active:scale-[0.97]
+        relative
+        min-h-[94px]
+        p-4
+        rounded-xl
+        border
+        text-left
+        cursor-pointer
+        select-none
+        focus:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-blue-300
+        transition-colors
         ${isSelected
-          ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-          : 'bg-white border-gray-200 hover:border-blue-300'}
+          ? 'bg-blue-600 border-blue-600 text-white'
+          : 'bg-white border-neutral-200 text-neutral-900 hover:border-blue-300'}
       `}
     >
-      <p className="text-sm font-semibold leading-tight pr-6">{service.name}</p>
-      <p className={`text-xs mt-0.5 ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
-        ₱{service.price}{atMax && isSelected ? ' · max' : ''}
-      </p>
+      <div className="
+        min-h-[58px]
+        flex
+        flex-col
+        justify-between
+        pr-20
+      ">
+        <p className="
+          text-sm
+          font-semibold
+          leading-snug
+          line-clamp-2
+        ">
+          {service.name}
+        </p>
+
+        <p className={`
+          text-sm
+          font-medium
+          tabular-nums
+          mt-2
+          ${isSelected
+            ? 'text-blue-100'
+            : 'text-neutral-500'}
+        `}>
+          ₱{service.price}
+          {atMax && isSelected && (
+            <span className="text-xs font-normal">
+              {' '}· max
+            </span>
+          )}
+        </p>
+      </div>
 
       {isSelected && (
         <div
-          className="absolute top-2 right-2 flex items-center gap-1"
+          className="
+            absolute
+            right-3
+            bottom-3
+            flex
+            items-center
+            gap-1
+          "
           onClick={e => e.stopPropagation()}
         >
           <button
+            type="button"
             onClick={onMinus}
-            className="w-5 h-5 rounded-full bg-white/30 text-white text-xs flex items-center justify-center"
+            aria-label={`Decrease ${service.name} quantity`}
+            className="
+              w-8 h-8
+              rounded-md
+              bg-white/20
+              text-white
+              flex items-center justify-center
+              border border-white/10
+              hover:bg-white/30
+              focus:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-white
+              active:bg-white/40
+              transition
+            "
           >
-            −
+            <Minus size={15} strokeWidth={2.4} />
           </button>
-          <span className="text-xs font-bold text-white w-3 text-center">{qty}</span>
+
+          <span
+            aria-label={`Quantity ${qty}`}
+            className="
+              w-6
+              text-center
+              text-sm
+              font-bold
+              text-white
+              tabular-nums
+            "
+          >
+            {qty}
+          </span>
+
           <button
+            type="button"
             onClick={onPlus}
             disabled={atMax}
-            className="w-5 h-5 rounded-full bg-white/30 text-white text-xs flex items-center justify-center disabled:opacity-40"
+            aria-label={`Increase ${service.name} quantity`}
+            className="
+              w-8 h-8
+              rounded-md
+              bg-white/20
+              text-white
+              flex items-center justify-center
+              border border-white/10
+              hover:bg-white/30
+              focus:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-white
+              active:bg-white/40
+              disabled:opacity-40
+              transition
+            "
           >
-            +
+            <Plus size={15} strokeWidth={2.4} />
           </button>
         </div>
       )}
-    </button>
+    </div>
   )
 }
 
 function CartRow({ item, onMinus, onPlus }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-gray-600 flex-1 truncate">{item.name}</span>
-      <div className="flex items-center gap-2 shrink-0">
+    <div className="
+      min-h-9
+      flex
+      items-center
+      justify-between
+      gap-3
+    ">
+      <span className="
+        min-w-0
+        flex-1
+        truncate
+        text-sm
+        text-neutral-700
+        font-medium
+      ">
+        {item.name}
+      </span>
+
+      <div className="
+        flex
+        items-center
+        gap-1.5
+        shrink-0
+      ">
         <button
+          type="button"
           onClick={onMinus}
-          className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200"
+          aria-label={`Decrease ${item.name} quantity`}
+          className="
+            w-8 h-8
+            rounded-md
+            bg-neutral-100
+            text-neutral-700
+            flex items-center justify-center
+            hover:bg-neutral-200
+            focus:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-blue-200
+            active:bg-neutral-200
+            transition
+          "
         >
-          −
+          <Minus size={14} strokeWidth={2.3} />
         </button>
-        <span className="text-xs font-semibold w-4 text-center">{item.quantity}</span>
+
+        <span className="
+          w-5
+          text-center
+          text-sm
+          font-semibold
+          text-neutral-800
+          tabular-nums
+        ">
+          {item.quantity}
+        </span>
+
         <button
+          type="button"
           onClick={onPlus}
           disabled={item.quantity >= 8}
-          className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 text-base flex items-center justify-center active:bg-gray-200 disabled:opacity-40"
+          aria-label={`Increase ${item.name} quantity`}
+          className="
+            w-8 h-8
+            rounded-md
+            bg-neutral-100
+            text-neutral-700
+            flex items-center justify-center
+            hover:bg-neutral-200
+            focus:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-blue-200
+            active:bg-neutral-200
+            disabled:opacity-40
+            transition
+          "
         >
-          +
+          <Plus size={14} strokeWidth={2.3} />
         </button>
-        <span className="text-xs text-gray-500 w-16 text-right">
+
+        <span className="
+          w-16
+          text-right
+          text-sm
+          font-medium
+          text-neutral-600
+          tabular-nums
+        ">
           ₱{(item.price * item.quantity).toFixed(2)}
         </span>
       </div>
