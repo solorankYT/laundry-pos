@@ -9,6 +9,7 @@ import NewOrderForm from '../components/orders/NewOrderForm'
 import OrdersSidebar from '../components/layout/OrdersSidebar'
 
 import { FiMenu, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import { MobileNav } from '../components/layout/MobileNav';
 
 const TABS = [
   { key: 'pending',  label: 'Pending' },
@@ -258,20 +259,12 @@ export default function Orders() {
         </div>
 
         {/* ── MOBILE FAB ─────────────────────────────── */}
-        <button
-          onClick={() => setShowForm(true)}
-          className="
-            md:hidden
-            fixed bottom-5 right-5 z-30
-            w-14 h-14 rounded-full shadow-lg
-            bg-blue-600 text-white
-            flex items-center justify-center
-            active:scale-95 transition-transform
-          "
-          aria-label="New Order"
-        >
-          <FiPlus size={24} />
-        </button>
+
+
+          <MobileNav onAddClick={() => setShowForm(true)} />
+
+
+        
 
         {/* ── NEW ORDER FORM ─────────────────────────── */}
         {showForm && (

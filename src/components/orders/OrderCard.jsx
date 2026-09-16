@@ -102,18 +102,12 @@ export default function OrderCard({ order, onUpdateStatus, onMarkPaid, onClick }
       </div>
 
 
-
-      {/* BOTTOM ROW — actions */}
-
-
-
       {order.status !== 'released' && (
         <div
           className="flex gap-2 px-3 pb-3 pt-1"
           onClick={e => e.stopPropagation()}
         >
 
-          {/* Pay button — only when unpaid */}
           {!isPaid && (
             <button
               onClick={openPayConfirm}
