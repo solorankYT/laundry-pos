@@ -8,8 +8,8 @@ import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
 import OrdersSidebar from '../components/layout/OrdersSidebar'
 
-import { FiMenu, FiPlus, FiSearch, FiX } from 'react-icons/fi'
-import { MobileNav } from '../components/layout/MobileNav';
+import { Search, X, Plus, ClipboardList, SearchX } from 'lucide-react'
+import { MobileNav } from '../components/layout/MobileNav'
 
 const TABS = [
   { key: 'pending',  label: 'Pending' },
@@ -96,7 +96,6 @@ export default function Orders() {
     fetchOrders()
   }
 
-  // Filter orders by search query (client-side, instant)
   const displayedOrders = search.trim()
     ? orders.filter(o =>
         o.customer_name.toLowerCase().includes(search.toLowerCase())
@@ -104,7 +103,7 @@ export default function Orders() {
     : orders
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-neutral-50">
       <OrdersSidebar
         isOpen={sidebarOpen}
         toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
@@ -119,63 +118,52 @@ export default function Orders() {
 
       <main className="flex-1 ml-0 md:ml-64 flex flex-col overflow-hidden relative">
 
-        {/* ── PAGE HEADER — search bar ─────────────── */}
+        {/* ── SEARCH + NEW ORDER ─────────────── */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
-
-          {/* Mobile menu button */}
-          {/* <button
-            className="md:hidden w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 shrink-0"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            <FiMenu size={18} />
-          </button> */}
-
-          {/* Search bar — takes up all remaining space */}
           <div className="flex-1 relative">
-            <FiSearch
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
             />
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search customer name…"
+              placeholder="Search customer..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="
-                w-full h-9 pl-8 pr-8 rounded-lg border border-gray-200
-                bg-gray-50 text-sm text-gray-900
-                focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400
+                w-full h-10 pl-9 pr-9 rounded-lg border border-neutral-200
+                bg-neutral-50 text-sm text-neutral-900 placeholder:text-neutral-400
+                focus:outline-none focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100
                 transition
               "
             />
-            {/* Clear button */}
             {search && (
               <button
                 onClick={() => { setSearch(''); searchRef.current?.focus() }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 transition"
               >
-                <FiX size={14} />
+                <X size={13} />
               </button>
             )}
           </div>
 
-          {/* Desktop new order button */}
           <button
             onClick={() => setShowForm(true)}
             className="
               hidden md:flex items-center gap-1.5 shrink-0
-              h-9 px-4 rounded-lg text-sm font-semibold
-              bg-blue-600 text-white hover:bg-blue-700 transition
+              h-10 px-4 rounded-lg text-sm font-semibold
+              bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition
             "
           >
-            <FiPlus size={15} />
+            <Plus size={16} />
             New Order
           </button>
         </div>
 
-        {/* ── FILTER TABS ────────────────────────────── */}
-        <div className="bg-white border-b px-4 flex gap-1 overflow-x-auto">
+        {/* ── FILTER TABS (compact segmented) ─────────────── */}
+        <div className="bg-white border-b px-4 py-2.5 flex gap-1.5 overflow-x-auto">
           {TABS.map(tab => {
             const count = counts[tab.key]
             const isActive = filter === tab.key
@@ -184,18 +172,16 @@ export default function Orders() {
                 key={tab.key}
                 onClick={() => { setFilter(tab.key); setSearch('') }}
                 className={`
-                  h-11 px-3.5 text-sm font-medium whitespace-nowrap
-                  border-b-2 transition-colors
-                  ${isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'}
+                  shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full
+                  text-[13px] font-semibold transition-colors
+                  ${isActive ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}
                 `}
               >
                 {tab.label}
-                {count > 0 && (
+                {typeof count === 'number' && count > 0 && (
                   <span className={`
-                    ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-semibold
-                    ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}
+                    text-[11px] font-semibold px-1.5 rounded-full leading-[1.4]
+                    ${isActive ? 'bg-white/20 text-white' : 'bg-white text-neutral-400'}
                   `}>
                     {count}
                   </span>
@@ -208,9 +194,14 @@ export default function Orders() {
         {/* ── ORDER LIST ─────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <>
+              <div className="hidden md:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden">
+                {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
+              </div>
+              <div className="md:hidden px-3 pt-3 pb-28 space-y-2.5">
+                {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+              </div>
+            </>
           ) : displayedOrders.length === 0 ? (
             search.trim() ? (
               <NoResults query={search} onClear={() => setSearch('')} />
@@ -221,7 +212,7 @@ export default function Orders() {
             <>
               {/* Desktop table */}
               <div className="hidden md:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden shadow-sm">
-                <div className="grid grid-cols-[1fr_1.6fr_90px_80px_90px_140px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 py-2.5 border-b bg-gray-50">
+                <div className="grid grid-cols-[1fr_1.6fr_90px_80px_90px_150px] text-[11px] font-semibold text-neutral-400 uppercase tracking-wide px-4 py-2.5 border-b bg-neutral-50">
                   <span>Customer</span>
                   <span>Services</span>
                   <span>Total</span>
@@ -242,7 +233,7 @@ export default function Orders() {
               </div>
 
               {/* Mobile cards */}
-              <div className="md:hidden px-3 pt-3 pb-24 space-y-2.5">
+              <div className="md:hidden px-3 pt-3 pb-28 space-y-2.5">
                 {displayedOrders.map(order => (
                   <OrderCard
                     key={order.id}
@@ -258,15 +249,8 @@ export default function Orders() {
           )}
         </div>
 
-        {/* ── MOBILE FAB ─────────────────────────────── */}
+        <MobileNav onAddClick={() => setShowForm(true)} />
 
-
-          <MobileNav onAddClick={() => setShowForm(true)} />
-
-
-        
-
-        {/* ── NEW ORDER FORM ─────────────────────────── */}
         {showForm && (
           <NewOrderForm
             onClose={() => setShowForm(false)}
@@ -274,7 +258,6 @@ export default function Orders() {
           />
         )}
 
-        {/* ── ORDER DRAWER ───────────────────────────── */}
         {selectedOrder && (
           <OrderDrawer
             order={selectedOrder}
@@ -288,17 +271,47 @@ export default function Orders() {
   )
 }
 
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 p-4 animate-pulse space-y-3">
+      <div className="flex justify-between">
+        <div className="h-3.5 w-28 bg-neutral-200 rounded" />
+        <div className="h-3.5 w-14 bg-neutral-200 rounded" />
+      </div>
+      <div className="h-3 w-40 bg-neutral-100 rounded" />
+      <div className="flex justify-between">
+        <div className="h-3 w-16 bg-neutral-100 rounded" />
+        <div className="h-3 w-12 bg-neutral-100 rounded" />
+      </div>
+      <div className="h-9 w-full bg-neutral-100 rounded-lg" />
+    </div>
+  )
+}
+
+function SkeletonRow() {
+  return (
+    <div className="grid grid-cols-[1fr_1.6fr_90px_80px_90px_150px] items-center gap-4 px-4 py-3.5 border-t animate-pulse">
+      <div className="h-3.5 w-24 bg-neutral-200 rounded" />
+      <div className="h-3 w-32 bg-neutral-100 rounded" />
+      <div className="h-3.5 w-14 bg-neutral-200 rounded" />
+      <div className="h-5 w-14 bg-neutral-100 rounded-full" />
+      <div className="h-5 w-14 bg-neutral-100 rounded-full" />
+      <div className="h-8 w-20 bg-neutral-100 rounded-lg" />
+    </div>
+  )
+}
+
 function NoResults({ query, onClear }) {
   return (
     <div className="flex flex-col items-center justify-center h-full py-24 px-8 text-center">
-      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3 text-2xl">
-        🔍
+      <div className="w-11 h-11 rounded-full bg-neutral-100 flex items-center justify-center mb-3">
+        <SearchX size={20} className="text-neutral-400" />
       </div>
-      <p className="text-gray-700 font-medium">No results for "{query}"</p>
-      <p className="text-gray-400 text-sm mt-1 mb-4">Try a different name</p>
+      <p className="text-neutral-700 font-medium text-sm">No results for "{query}"</p>
+      <p className="text-neutral-400 text-xs mt-1 mb-4">Try a different name</p>
       <button
         onClick={onClear}
-        className="h-9 px-4 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold"
+        className="h-9 px-4 bg-neutral-100 text-neutral-700 rounded-lg text-sm font-semibold hover:bg-neutral-200 transition"
       >
         Clear search
       </button>
@@ -309,19 +322,21 @@ function NoResults({ query, onClear }) {
 function EmptyState({ filter, onNewOrder }) {
   return (
     <div className="flex flex-col items-center justify-center h-full py-24 px-8 text-center">
-      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3 text-2xl">
-        📋
+      <div className="w-11 h-11 rounded-full bg-neutral-100 flex items-center justify-center mb-3">
+        <ClipboardList size={20} className="text-neutral-400" />
       </div>
-      <p className="text-gray-700 font-medium">No {filter !== 'all' ? filter : ''} orders</p>
-      <p className="text-gray-400 text-sm mt-1 mb-4">
-        {filter === 'pending' ? 'New orders will appear here' : 'Try a different filter'}
+      <p className="text-neutral-700 font-medium text-sm">
+        No {filter !== 'all' ? filter : ''} orders
+      </p>
+      <p className="text-neutral-400 text-xs mt-1 mb-4">
+        {filter === 'pending' ? 'New laundry orders will appear here' : 'Try a different filter'}
       </p>
       {filter === 'pending' && (
         <button
           onClick={onNewOrder}
-          className="h-10 px-5 bg-blue-600 text-white rounded-lg text-sm font-semibold"
+          className="h-10 px-5 bg-blue-600 text-white rounded-lg text-sm font-semibold active:scale-[0.98] transition"
         >
-          + New Order
+          New Order
         </button>
       )}
     </div>
