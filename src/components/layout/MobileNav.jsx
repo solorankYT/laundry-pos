@@ -35,7 +35,7 @@ export function MobileNav({ onAddClick }) {
         type="button"
         onClick={onAddClick}
         aria-label="New Order"
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-pine text-white shadow-lg shadow-pine/30 transition-transform active:scale-95"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-pine text-black shadow-lg shadow-pine/30 transition-transform active:scale-95"
       >
         <Plus size={24} strokeWidth={2.5} />
       </button>

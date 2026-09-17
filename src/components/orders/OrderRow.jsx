@@ -7,10 +7,8 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
-  Edit3,
-  MoreHorizontal,
-  Trash2,
 } from 'lucide-react'
+import ConfirmModal from '../ui/ConfirmModal'
 
 dayjs.extend(relativeTime)
 
@@ -47,17 +45,21 @@ function formatServices(items) {
   if (!items || items.length === 0) return '—'
 
   return items
-    .map(i =>
-      i.quantity > 1
-        ? `${i.service_name} ×${i.quantity}`
-        : i.service_name
+    .map(item =>
+      item.quantity > 1
+        ? `${item.service_name} ×${item.quantity}`
+        : item.service_name
     )
     .join(', ')
 }
 
 function orderCode(order) {
   if (order.order_number) return order.order_number
-  if (order.id) return order.id.toString().slice(-4).toUpperCase()
+
+  if (order.id) {
+    return order.id.toString().slice(-4).toUpperCase()
+  }
+
   return null
 }
 
@@ -66,39 +68,49 @@ export default function OrderRow({
   onClick,
   onUpdateStatus,
   onMarkPaid,
-  onEdit,
-  onDelete,
   isActive,
 }) {
   const [updating, setUpdating] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [confirm, setConfirm] = useState(null)
 
-  const status = STATUS_META[order.status] ?? STATUS_META.pending
+  const status =
+    STATUS_META[order.status] ?? STATUS_META.pending
+
   const advance = NEXT_ACTION[order.status]
 
   const isPaid = !!order.payment_status
+
   const releaseBlocked =
     advance?.next === 'released' && !isPaid
 
   const servicesSummary = formatServices(order.order_items)
   const code = orderCode(order)
 
-  const handleAdvance = async e => {
-    e.stopPropagation()
+  const runAdvance = async () => {
+    setConfirm(null)
 
-    if (!advance || updating || releaseBlocked) return
+    if (
+      !advance ||
+      updating ||
+      releaseBlocked
+    ) {
+      return
+    }
 
     setUpdating(true)
 
     try {
-      await onUpdateStatus(order.id, advance.next)
+      await onUpdateStatus(
+        order.id,
+        advance.next
+      )
     } finally {
       setUpdating(false)
     }
   }
 
-  const handlePay = async e => {
-    e.stopPropagation()
+  const runPay = async () => {
+    setConfirm(null)
 
     if (updating) return
 
@@ -111,218 +123,235 @@ export default function OrderRow({
     }
   }
 
-  const handleEdit = e => {
+  const askAdvance = e => {
     e.stopPropagation()
 
-    if (updating || deleting) return
+    if (!advance || releaseBlocked) return
 
-    onEdit?.(order)
+    setConfirm({
+      message:
+        advance.next === 'released'
+          ? 'Release this order to the customer?'
+          : 'Mark this order as done?',
+      action: runAdvance,
+    })
   }
 
-  const handleDelete = async e => {
+  const askPay = e => {
     e.stopPropagation()
 
-    if (updating || deleting) return
+    if (updating) return
 
-    const confirmed = window.confirm(
-      `Delete order #${code ?? ''} for ${order.customer_name}?\n\nThis action cannot be undone.`
-    )
-
-    if (!confirmed) return
-
-    setDeleting(true)
-
-    try {
-      await onDelete?.(order.id)
-    } finally {
-      setDeleting(false)
-    }
+    setConfirm({
+      message: 'Mark this order as paid?',
+      action: runPay,
+    })
   }
 
   return (
-    <div
-      onClick={onClick}
-      className={`
-        group
-        grid grid-cols-[1fr_1.6fr_90px_80px_90px_220px]
-        px-4 py-3.5 text-sm border-t items-center
-        cursor-pointer transition-colors
-        ${isActive
-          ? 'bg-blue-50/60 border-l-4 border-l-blue-500'
-          : 'hover:bg-neutral-50'
-        }
-      `}
-    >
-      {/* Customer */}
-      <div className="min-w-0 pr-3">
-        <p className="font-semibold text-neutral-900 truncate">
-          {order.customer_name}
-        </p>
-
-        <p className="text-xs text-neutral-400 mt-0.5">
-          {code ? `#${code} · ` : ''}
-          {dayjs(order.created_at).fromNow()}
-        </p>
-      </div>
-
-      {/* Services */}
+    <>
       <div
-        className="text-neutral-500 text-xs truncate pr-4"
-        title={servicesSummary}
+        onClick={onClick}
+        className={`
+          group
+          grid
+          grid-cols-[1fr_1.6fr_90px_80px_90px_220px]
+          px-4
+          py-3.5
+          text-sm
+          border-t
+          items-center
+          cursor-pointer
+          transition-colors
+
+          ${
+            isActive
+              ? 'bg-blue-50/60 border-l-4 border-l-blue-500'
+              : 'hover:bg-neutral-50'
+          }
+        `}
       >
-        {servicesSummary}
-      </div>
+        {/* CUSTOMER */}
+        <div className="min-w-0 pr-3">
+          <p className="
+            font-semibold
+            text-neutral-900
+            truncate
+          ">
+            {order.customer_name}
+          </p>
 
-      {/* Total */}
-      <div className="font-semibold text-neutral-900 tabular-nums">
-        ₱{Number(order.total).toFixed(2)}
-      </div>
+          <p className="
+            text-xs
+            text-neutral-400
+            mt-0.5
+          ">
+            {code ? `#${code} · ` : ''}
+            {dayjs(order.created_at).fromNow()}
+          </p>
+        </div>
 
-      {/* Payment */}
-      <div>
-        <span
-          className={`
-            inline-flex items-center gap-1
-            px-2 py-1 rounded-full text-xs font-semibold
-            ${
-              isPaid
-                ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
-            }
-          `}
+        {/* SERVICES */}
+        <div
+          className="
+            text-neutral-500
+            text-xs
+            truncate
+            pr-4
+          "
+          title={servicesSummary}
         >
-          {isPaid ? (
-            <CheckCircle2 size={12} />
-          ) : (
-            <CreditCard size={12} />
-          )}
+          {servicesSummary}
+        </div>
 
-          {isPaid ? 'Paid' : 'Unpaid'}
-        </span>
-      </div>
+        {/* TOTAL */}
+        <div className="
+          font-semibold
+          text-neutral-900
+          tabular-nums
+        ">
+          ₱{Number(order.total).toFixed(2)}
+        </div>
 
-      {/* Status */}
-      <div>
-        <span
-          className={`
-            inline-flex
-            px-2 py-1 rounded-full border
-            text-xs font-semibold
-            ${status.badge}
-          `}
+        {/* PAYMENT */}
+        <div>
+          <span
+            className={`
+              inline-flex
+              items-center
+              gap-1
+              px-2
+              py-1
+              rounded-full
+              text-xs
+              font-semibold
+
+              ${
+                isPaid
+                  ? 'bg-green-50 text-green-700'
+                  : 'bg-red-50 text-red-700'
+              }
+            `}
+          >
+            {isPaid ? (
+              <CheckCircle2 size={12} />
+            ) : (
+              <CreditCard size={12} />
+            )}
+
+            {isPaid ? 'Paid' : 'Unpaid'}
+          </span>
+        </div>
+
+        {/* STATUS */}
+        <div>
+          <span
+            className={`
+              inline-flex
+              px-2
+              py-1
+              rounded-full
+              border
+              text-xs
+              font-semibold
+              ${status.badge}
+            `}
+          >
+            {status.label}
+          </span>
+        </div>
+
+        {/* ACTIONS */}
+        <div
+          className="
+            flex
+            items-center
+            justify-end
+            gap-1.5
+          "
+          onClick={e => e.stopPropagation()}
         >
-          {status.label}
-        </span>
-      </div>
+          {order.status === 'released' ? (
 
-      {/* Actions */}
-      <div
-        className="flex items-center justify-end gap-1.5"
-        onClick={e => e.stopPropagation()}
-      >
-        {order.status === 'released' ? (
-          <>
-            <span className="text-xs text-neutral-400 mr-1">
+            <span className="
+              text-xs
+              text-neutral-400
+              pr-2
+            ">
               Completed
             </span>
 
-            {/* Edit still available, but secondary */}
-            <IconBtn
-              label="Edit order"
-              icon={Edit3}
-              onClick={handleEdit}
-              disabled={updating || deleting}
-            />
+          ) : (
 
-            <IconBtn
-              label="Delete order"
-              icon={Trash2}
-              onClick={handleDelete}
-              disabled={updating || deleting}
-              destructive
-            />
-          </>
-        ) : (
-          <>
-            {/* Pay */}
-            {!isPaid && (
-              <ActionBtn
-                label={updating ? '…' : 'Pay'}
-                icon={CreditCard}
-                disabled={updating || deleting}
-                className="bg-green-600 text-white hover:bg-green-700"
-                onClick={handlePay}
-              />
-            )}
-
-            {/* Main workflow action */}
-            {advance && (
-              <ActionBtn
-                label={updating ? '…' : advance.label}
-                icon={advance.icon}
-                disabled={
-                  updating ||
-                  deleting ||
-                  releaseBlocked
-                }
-                title={
-                  releaseBlocked
-                    ? 'Payment required before release'
-                    : undefined
-                }
-                className={
-                  releaseBlocked
-                    ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }
-                onClick={handleAdvance}
-              />
-            )}
-
-            {/* Secondary actions */}
-            <div className="relative flex items-center">
-              <IconBtn
-                label="More actions"
-                icon={MoreHorizontal}
-                disabled={updating || deleting}
-                onClick={e => {
-                  e.stopPropagation()
-
-                  const menu =
-                    e.currentTarget.nextElementSibling
-
-                  if (menu) {
-                    menu.classList.toggle('hidden')
+            <>
+              {/* PAY */}
+              {!isPaid && (
+                <ActionBtn
+                  label={
+                    updating
+                      ? '…'
+                      : 'Pay'
                   }
-                }}
-              />
-
-              <div
-                className="
-                  hidden absolute right-0 top-10 z-20
-                  w-40 bg-white border border-neutral-200
-                  rounded-xl shadow-lg p-1
-                "
-                onClick={e => e.stopPropagation()}
-              >
-                <MenuBtn
-                  icon={Edit3}
-                  label="Edit order"
-                  onClick={handleEdit}
+                  icon={CreditCard}
+                  disabled={updating}
+                  className="
+                    bg-green-600
+                    text-white
+                    hover:bg-green-700
+                  "
+                  onClick={askPay}
                 />
+              )}
 
-                <MenuBtn
-                  icon={Trash2}
-                  label="Delete order"
-                  destructive
-                  onClick={handleDelete}
+              {/* NEXT WORKFLOW ACTION */}
+              {advance && (
+                <ActionBtn
+                  label={
+                    updating
+                      ? '…'
+                      : advance.label
+                  }
+                  icon={advance.icon}
+                  disabled={
+                    updating ||
+                    releaseBlocked
+                  }
+                  title={
+                    releaseBlocked
+                      ? 'Payment required before release'
+                      : undefined
+                  }
+                  className={
+                    releaseBlocked
+                      ? `
+                        bg-neutral-100
+                        text-neutral-400
+                        cursor-not-allowed
+                      `
+                      : `
+                        bg-blue-600
+                        text-white
+                        hover:bg-blue-700
+                      `
+                  }
+                  onClick={askAdvance}
                 />
-              </div>
-            </div>
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* CONFIRM MODAL */}
+      {confirm && (
+        <ConfirmModal
+          isOpen={true}
+          message={confirm.message}
+          onConfirm={confirm.action}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </>
   )
 }
 
@@ -341,17 +370,27 @@ function ActionBtn({
       disabled={disabled}
       title={title}
       className={`
-        inline-flex items-center justify-center gap-1.5
-        h-9 px-3 rounded-lg
-        text-xs font-semibold
+        inline-flex
+        items-center
+        justify-center
+        gap-1.5
+        h-9
+        px-3
+        rounded-lg
+        text-xs
+        font-semibold
         whitespace-nowrap
         transition
+
         focus:outline-none
         focus-visible:ring-2
         focus-visible:ring-blue-500
+
         disabled:opacity-50
         disabled:cursor-not-allowed
+
         active:scale-[0.97]
+
         ${className}
       `}
     >
@@ -360,73 +399,3 @@ function ActionBtn({
     </button>
   )
 }
-
-function IconBtn({
-  label,
-  icon: Icon,
-  onClick,
-  disabled,
-  destructive = false,
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        w-9 h-9
-        rounded-lg
-        flex items-center justify-center
-        border
-        transition
-        focus:outline-none
-        focus-visible:ring-2
-        focus-visible:ring-blue-500
-        disabled:opacity-50
-        disabled:cursor-not-allowed
-        active:scale-[0.95]
-        ${
-          destructive
-            ? 'border-transparent text-neutral-400 hover:bg-red-50 hover:text-red-600'
-            : 'border-transparent text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
-        }
-      `}
-    >
-      <Icon size={16} />
-    </button>
-  )
-}
-
-function MenuBtn({
-  icon: Icon,
-  label,
-  onClick,
-  destructive = false,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`
-        w-full
-        h-10
-        px-3
-        rounded-lg
-        flex items-center gap-2
-        text-xs font-medium
-        text-left
-        ${
-          destructive
-            ? 'text-red-600 hover:bg-red-50'
-            : 'text-neutral-700 hover:bg-neutral-100'
-        }
-      `}
-    >
-      <Icon size={15} />
-      {label}
-    </button>
-  )
-}
-
