@@ -30,7 +30,6 @@ export function MobileNav({ onAddClick }) {
         ))}
       </div>
 
-      {/* New order — most prominent action */}
       <button
         type="button"
         onClick={onAddClick}
