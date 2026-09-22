@@ -559,7 +559,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
           )}
         </div>
 
-        {/* Extra bottom room so the sticky checkout never covers content */}
         <div className="h-4" />
       </main>
 
@@ -575,8 +574,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
 
         {itemCount > 0 && (
           <div className="mb-4">
-
-            {/* Cart */}
             <div className="
               max-h-40
               overflow-y-auto
@@ -632,7 +629,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
 
         <div className="flex items-center gap-4">
 
-          {/* Total */}
           <div className="min-w-0 flex-1">
             <p className="
               text-xs
@@ -655,7 +651,6 @@ export default function NewOrderForm({ onClose, onCreated }) {
             </p>
           </div>
 
-          {/* Complete */}
           <button
             type="button"
             onClick={handleSubmit}
@@ -776,15 +771,41 @@ function PayToggle({
   )
 }
 
+/* ── SERVICE LOGOS ───────────────────────────────────── */
+
+const SERVICE_LOGOS = {
+  'fabric softener': '/logo/fabric.png',
+  'spin dry': '/logo/spindry.png',
+  detergent: '/logo/detergent.png',
+  fabric: '/logo/fabric.png',
+  spindry: '/logo/spindry.png',
+  dry: '/logo/spindry.png',
+  fold: '/logo/fold.png',
+  wash: '/logo/wash.png',
+}
+
+function getServiceLogo(name) {
+  const normalized = name.toLowerCase().trim()
+
+  // Exact match first
+  const exactMatch = SERVICE_LOGOS[normalized]
+  if (exactMatch) return exactMatch
+
+  // Otherwise, match the most specific/longest name first
+  const match = Object.keys(SERVICE_LOGOS)
+    .sort((a, b) => b.length - a.length)
+    .find(key => normalized.includes(key))
+
+  return match ? SERVICE_LOGOS[match] : null
+}
+
 function ServiceTile({
   service,
   qty,
   onTap,
-  onMinus,
-  onPlus,
 }) {
   const isSelected = qty > 0
-  const atMax = qty >= 8
+  const logo = getServiceLogo(service.name)
 
   return (
     <div
@@ -800,129 +821,68 @@ function ServiceTile({
       aria-pressed={isSelected}
       className={`
         relative
-        min-h-[94px]
-        p-4
+        min-h-[100px]
+        px-3
+        py-3
         rounded-xl
         border
-        text-left
+        text-center
         cursor-pointer
         select-none
+        flex
+        items-center
+        justify-center
         focus:outline-none
         focus-visible:ring-2
         focus-visible:ring-blue-300
         transition-colors
-        ${isSelected
-          ? 'bg-blue-600 border-blue-600 text-white'
-          : 'bg-white border-neutral-200 text-neutral-900 hover:border-blue-300'}
+        ${
+          isSelected
+            ? 'bg-blue-600 border-blue-600 text-white'
+            : 'bg-white border-neutral-200 text-neutral-900 hover:border-blue-300'
+        }
       `}
     >
-      <div className="
-        min-h-[58px]
-        flex
-        flex-col
-        justify-between
-        pr-20
-      ">
-        <p className="
-          text-sm
-          font-semibold
-          leading-snug
-          line-clamp-2
-        ">
-          {service.name}
-        </p>
-
-        <p className={`
-          text-sm
-          font-medium
-          tabular-nums
-          mt-2
-          ${isSelected
-            ? 'text-blue-100'
-            : 'text-neutral-500'}
-        `}>
-          ₱{service.price}
-          {atMax && isSelected && (
-            <span className="text-xs font-normal">
-              {' '}· max
-            </span>
-          )}
-        </p>
-      </div>
-
+      {/* Quantity */}
       {isSelected && (
-        <div
+        <span
           className="
             absolute
-            right-3
-            bottom-3
+            top-2
+            right-2
+            w-6
+            h-6
+            rounded-full
+            bg-white
+            text-blue-600
+            text-xs
+            font-bold
             flex
             items-center
-            gap-1
+            justify-center
+            tabular-nums
           "
-          onClick={e => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={onMinus}
-            aria-label={`Decrease ${service.name} quantity`}
-            className="
-              w-8 h-8
-              rounded-md
-              bg-white/20
-              text-white
-              flex items-center justify-center
-              border border-white/10
-              hover:bg-white/30
-              focus:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-white
-              active:bg-white/40
-              transition
-            "
-          >
-            <Minus size={15} strokeWidth={2.4} />
-          </button>
-
-          <span
-            aria-label={`Quantity ${qty}`}
-            className="
-              w-6
-              text-center
-              text-sm
-              font-bold
-              text-white
-              tabular-nums
-            "
-          >
-            {qty}
-          </span>
-
-          <button
-            type="button"
-            onClick={onPlus}
-            disabled={atMax}
-            aria-label={`Increase ${service.name} quantity`}
-            className="
-              w-8 h-8
-              rounded-md
-              bg-white/20
-              text-white
-              flex items-center justify-center
-              border border-white/10
-              hover:bg-white/30
-              focus:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-white
-              active:bg-white/40
-              disabled:opacity-40
-              transition
-            "
-          >
-            <Plus size={15} strokeWidth={2.4} />
-          </button>
-        </div>
+          {qty}
+        </span>
       )}
+
+      {/* Icon + Title */}
+      <div className="flex flex-col items-center justify-center gap-2">
+        {logo ? (
+          <img
+            src={logo}
+            alt=""
+            className="w-11 h-11 object-contain"
+          />
+        ) : (
+          <div className="w-11 h-11" />
+        )}
+
+        <p className="text-sm font-semibold leading-tight">
+          {service.name}
+        </p>
+      </div>
     </div>
   )
 }
