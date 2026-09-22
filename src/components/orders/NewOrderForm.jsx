@@ -508,61 +508,73 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         pb-8
       ">
 
-        {/* QUICK PRESET */}
-        <button
-          type="button"
-          onClick={applyPreset}
-          className="
-            w-full
-            min-h-[54px]
-            px-4
-            py-3
-            rounded-lg
-            flex items-center justify-center gap-2.5
-            bg-blue-50
-            border border-blue-200
-            text-blue-700
-            text-sm font-semibold
-            hover:bg-blue-100
-            focus:outline-none focus:ring-2 focus:ring-blue-200
-            active:scale-[0.99]
-            transition
-          "
-        >
-          <span className="
-            w-7 h-7
-            rounded-md
-            bg-blue-100
-            flex items-center justify-center
-            shrink-0
-          ">
-            <Zap size={16} strokeWidth={2.2} />
-          </span>
-
-          <span>Quick add: Wash, Dry &amp; Fold</span>
-        </button>
-
-        {/* SERVICES */}
+      {/* SERVICES */}
         {services.length > 0 && (
           <Section
             title="Services"
             error={errors.services}
           >
             <div className="grid grid-cols-2 gap-3">
+
+              {/* QUICK PRESET */}
+              <button
+                type="button"
+                onClick={applyPreset}
+                className="
+                  relative
+                  min-h-[100px]
+                  px-3
+                  py-3
+                  rounded-xl
+                  border
+                  border-blue-200
+                  bg-blue-50
+                  text-blue-700
+                  flex
+                  items-center
+                  justify-center
+                  text-center
+                  cursor-pointer
+                  select-none
+                  hover:bg-blue-100
+                  hover:border-blue-300
+                  focus:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-blue-300
+                  active:scale-[0.98]
+                  transition
+                "
+              >
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <div
+                    className="
+                      w-11
+                      h-11
+                      rounded-lg
+                      bg-blue-100
+                      flex
+                      items-center
+                      justify-center
+                    "
+                  >
+                    <Zap
+                      size={22}
+                      strokeWidth={2.2}
+                    />
+                  </div>
+
+                  <span className="text-sm font-semibold leading-tight">
+                    Quick Add
+                  </span>
+                </div>
+              </button>
+
               {services.map(s => (
                 <ServiceTile
                   key={s.id}
                   service={s}
                   qty={selectedServices[s.id]?.quantity ?? 0}
                   onTap={() => toggleService(s)}
-                  onMinus={e => {
-                    e.stopPropagation()
-                    changeServiceQty(s.id, -1)
-                  }}
-                  onPlus={e => {
-                    e.stopPropagation()
-                    changeServiceQty(s.id, 1)
-                  }}
                 />
               ))}
             </div>
