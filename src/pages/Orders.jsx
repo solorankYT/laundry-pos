@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -526,7 +525,7 @@ export default function Orders() {
         {/* NEW / EDIT ORDER FORM */}
         {(showForm || editingOrder) && (
           <NewOrderForm
-            editOrder={editingOrder}
+            order={editingOrder}
             onClose={() => {
               setShowForm(false)
               setEditingOrder(null)
@@ -699,4 +698,3 @@ function EmptyState({ filter, onNewOrder }) {
     </div>
   )
 }
-
