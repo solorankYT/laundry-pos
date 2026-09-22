@@ -369,61 +369,65 @@ export default function Orders() {
 
         </div>
 
-        {/* FILTER TABS */}
-        <div className="bg-white border-b px-4 py-2.5 flex gap-1.5 overflow-x-auto">
+   {/* FILTER TABS */}
+      <div className="bg-white border-b border-stone-200 px-4 py-2.5 flex gap-1.5 overflow-x-auto">
 
-          {TABS.map(tab => {
-            const count = counts[tab.key]
-            const isActive = filter === tab.key
+        {TABS.map(tab => {
+          const count = counts[tab.key]
+          const isActive = filter === tab.key
 
-            return (
-              <button
-                type="button"
-                key={tab.key}
-                onClick={() => {
-                  setFilter(tab.key)
-                  setSearch('')
-                }}
-                className={`
-                  shrink-0
-                  flex items-center gap-1.5
-                  h-8 px-3
-                  rounded-full
-                  text-[13px] font-semibold
-                  transition-colors
-                  ${
-                    isActive
-                      ? 'bg-neutral-900 text-white'
-                      : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
-                  }
-                `}
-              >
-                {tab.label}
+          return (
+            <button
+              type="button"
+              key={tab.key}
+              onClick={() => {
+                setFilter(tab.key)
+                setSearch('')
+              }}
+              className={`
+                shrink-0
+                flex items-center gap-1.5
+                h-9 px-3.5
+                rounded-full
+                text-sm font-medium
+                transition-colors
 
-                {typeof count === 'number' && count > 0 && (
-                  <span
-                    className={`
-                      text-[11px]
-                      font-semibold
-                      px-1.5
-                      rounded-full
-                      leading-[1.4]
-                      ${
-                        isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-white text-neutral-400'
-                      }
-                    `}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+                ${
+                  isActive
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                }
+              `}
+            >
+              {tab.label}
 
-        </div>
+              {typeof count === 'number' && count > 0 && (
+                <span
+                  className={`
+                    text-[11px]
+                    font-semibold
+                    min-w-[18px]
+                    px-1
+                    rounded-full
+                    leading-[1.4]
+                    text-center
+                    tabular-nums
 
+                    ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-white text-stone-400'
+                    }
+                  `}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+
+      </div>
         {/* ORDER LIST */}
         <div className="flex-1 overflow-y-auto">
 
