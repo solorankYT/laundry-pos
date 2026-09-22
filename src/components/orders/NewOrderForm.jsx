@@ -11,9 +11,10 @@ import {
   CircleDollarSign,
 } from 'lucide-react'
 
-export default function NewOrderForm({ onClose, onCreated }) {
+export default function NewOrderForm({ order, onClose, onCreated }) {
   const { user } = useAuth()
   const nameRef = useRef(null)
+  const isEditing = !!order
 
   const [services, setServices] = useState([])
   const [addons, setAddons] = useState([])
@@ -29,8 +30,46 @@ export default function NewOrderForm({ onClose, onCreated }) {
   useEffect(() => {
     if (!user) return
     fetchData()
-    setTimeout(() => nameRef.current?.focus(), 120)
+    if (!isEditing) {
+      setTimeout(() => nameRef.current?.focus(), 120)
+    }
   }, [user])
+
+  // ── Pre-fill when editing an existing order ──────────
+  useEffect(() => {
+    if (!order) return
+
+    setCustomerName(order.customer_name ?? '')
+    setPaymentStatus(
+      order.payment_status === true || order.payment_status === false
+        ? order.payment_status
+        : null
+    )
+    setNotes(order.notes ?? '')
+    if (order.notes) setShowNotes(true)
+
+    const svcMap = {}
+    ;(order.order_items ?? []).forEach(item => {
+      svcMap[item.service_id] = {
+        id: item.service_id,
+        name: item.service_name,
+        price: Number(item.price),
+        quantity: item.quantity,
+      }
+    })
+    setSelectedServices(svcMap)
+
+    const addonMap = {}
+    ;(order.order_addons ?? []).forEach(a => {
+      addonMap[a.addon_id] = {
+        id: a.addon_id,
+        name: a.addons?.name ?? 'Add-on',
+        price: Number(a.unit_price),
+        quantity: a.quantity,
+      }
+    })
+    setSelectedAddons(addonMap)
+  }, [order])
 
   const fetchData = async () => {
     const [{ data: svcData }, { data: addonData }] = await Promise.all([
@@ -213,61 +252,106 @@ export default function NewOrderForm({ onClose, onCreated }) {
     setErrors({})
 
     try {
-      const { data: order, error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          customer_name: customerName.trim(),
-          payment_status: paymentStatus,
-          notes: notes.trim() || null,
-          total,
-          created_by: user.id,
-          status: 'pending',
-          created_by_email: user.email,
-        })
-        .select()
-        .single()
-
-      if (orderErr) throw orderErr
-
-      if (serviceCount > 0) {
-        const items = Object.values(selectedServices).map(i => ({
-          order_id: order.id,
-          service_id: i.id,
-          service_name: i.name,
-          price: i.price,
-          quantity: i.quantity,
-        }))
-
-        const { error: itemsErr } = await supabase
-          .from('order_items')
-          .insert(items)
-
-        if (itemsErr) throw itemsErr
-      }
-
-      if (addonCount > 0) {
-        const addonRows = Object.values(selectedAddons).map(i => ({
-          order_id: order.id,
-          addon_id: i.id,
-          quantity: i.quantity,
-          unit_price: i.price,
-          total: i.price * i.quantity,
-        }))
-
-        const { error: addonsErr } = await supabase
-          .from('order_addons')
-          .insert(addonRows)
-
-        if (addonsErr) throw addonsErr
+      if (isEditing) {
+        await submitEdit()
+      } else {
+        await submitCreate()
       }
 
       onCreated()
     } catch (err) {
       console.error(err)
       setErrors({
-        submit: 'Failed to create order. Try again.',
+        submit: isEditing
+          ? 'Failed to save changes. Try again.'
+          : 'Failed to create order. Try again.',
       })
       setSubmitting(false)
+    }
+  }
+
+  const submitCreate = async () => {
+    const { data: newOrder, error: orderErr } = await supabase
+      .from('orders')
+      .insert({
+        customer_name: customerName.trim(),
+        payment_status: paymentStatus,
+        notes: notes.trim() || null,
+        total,
+        created_by: user.id,
+        status: 'pending',
+        created_by_email: user.email,
+      })
+      .select()
+      .single()
+
+    if (orderErr) throw orderErr
+
+    await insertLineItems(newOrder.id)
+  }
+
+  const submitEdit = async () => {
+    const { error: orderErr } = await supabase
+      .from('orders')
+      .update({
+        customer_name: customerName.trim(),
+        payment_status: paymentStatus,
+        notes: notes.trim() || null,
+        total,
+      })
+      .eq('id', order.id)
+
+    if (orderErr) throw orderErr
+
+    // Replace existing line items rather than trying to diff them.
+    const { error: delItemsErr } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('order_id', order.id)
+
+    if (delItemsErr) throw delItemsErr
+
+    const { error: delAddonsErr } = await supabase
+      .from('order_addons')
+      .delete()
+      .eq('order_id', order.id)
+
+    if (delAddonsErr) throw delAddonsErr
+
+    await insertLineItems(order.id)
+  }
+
+  const insertLineItems = async (orderId) => {
+    if (serviceCount > 0) {
+      const items = Object.values(selectedServices).map(i => ({
+        order_id: orderId,
+        service_id: i.id,
+        service_name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+      }))
+
+      const { error: itemsErr } = await supabase
+        .from('order_items')
+        .insert(items)
+
+      if (itemsErr) throw itemsErr
+    }
+
+    if (addonCount > 0) {
+      const addonRows = Object.values(selectedAddons).map(i => ({
+        order_id: orderId,
+        addon_id: i.id,
+        quantity: i.quantity,
+        unit_price: i.price,
+        total: i.price * i.quantity,
+      }))
+
+      const { error: addonsErr } = await supabase
+        .from('order_addons')
+        .insert(addonRows)
+
+      if (addonsErr) throw addonsErr
     }
   }
 
@@ -280,7 +364,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close new order"
+            aria-label={isEditing ? 'Close edit order' : 'Close new order'}
             className="
               w-10 h-10 shrink-0
               flex items-center justify-center
@@ -296,7 +380,7 @@ export default function NewOrderForm({ onClose, onCreated }) {
           </button>
 
           <h2 className="flex-1 text-lg font-semibold text-neutral-900">
-            New Order
+            {isEditing ? 'Edit Order' : 'New Order'}
           </h2>
 
           {itemCount > 0 && (
@@ -680,7 +764,9 @@ export default function NewOrderForm({ onClose, onCreated }) {
               transition
             "
           >
-            {submitting ? 'Creating…' : 'Complete Order'}
+            {submitting
+              ? (isEditing ? 'Saving…' : 'Creating…')
+              : (isEditing ? 'Save Changes' : 'Complete Order')}
           </button>
         </div>
 
@@ -981,4 +1067,4 @@ function CartRow({ item, onMinus, onPlus }) {
       </div>
     </div>
   )
-}
+} 
