@@ -11,7 +11,18 @@ export function MobileNav({ onAddClick }) {
   return (
     <nav className="fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 flex items-center gap-2 lg:hidden">
       {/* Navigation */}
-      <div className="flex flex-1 items-center gap-1 rounded-full border border-line bg-surface p-1.5 shadow-md shadow-ink/10">
+      <div
+        className="
+          flex flex-1 items-center gap-1
+          rounded-full
+          border border-line/60
+          bg-surface/90
+          p-1.5
+          shadow-lg shadow-ink/10
+          backdrop-blur-xl backdrop-saturate-150
+          supports-[backdrop-filter]:bg-surface/75
+        "
+      >
         {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -20,12 +31,14 @@ export function MobileNav({ onAddClick }) {
             aria-label={label}
             className={({ isActive }) =>
               `flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-2 transition-colors ${
-                isActive ? 'bg-pine-soft text-pine' : 'text-ink-muted active:bg-black/5'
+                isActive
+                  ? 'bg-pine-soft text-pine'
+                  : 'text-ink/65 active:bg-black/5'
               }`
             }
           >
-            <Icon size={19} strokeWidth={2} aria-hidden="true" />
-            <span className="text-[10px] font-medium leading-none">{label}</span>
+            <Icon size={19} strokeWidth={2.25} aria-hidden="true" />
+            <span className="text-[10px] font-semibold leading-none">{label}</span>
           </NavLink>
         ))}
       </div>
