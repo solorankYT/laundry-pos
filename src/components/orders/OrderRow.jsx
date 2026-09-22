@@ -1,43 +1,26 @@
-
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import {
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  CreditCard,
-} from 'lucide-react'
+import { Check, ArrowRight, Banknote, CircleCheck } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 
 dayjs.extend(relativeTime)
 
-const STATUS_META = {
-  pending: {
-    badge: 'bg-amber-50 text-amber-700 border-amber-100',
-    label: 'Pending',
-  },
-  done: {
-    badge: 'bg-blue-50 text-blue-700 border-blue-100',
-    label: 'Done',
-  },
-  released: {
-    badge: 'bg-neutral-100 text-neutral-500 border-neutral-200',
-    label: 'Released',
-  },
+/*
+ * Same three-stage sequence as the drawer, shown as a compact
+ * dot rail instead of a colored status pill.
+ */
+const STAGES = ['pending', 'done', 'released']
+
+const STAGE_LABEL = {
+  pending: 'Pending',
+  done: 'Done',
+  released: 'Released',
 }
 
 const NEXT_ACTION = {
-  pending: {
-    next: 'done',
-    label: 'Mark Done',
-    icon: Check,
-  },
-  done: {
-    next: 'released',
-    label: 'Release',
-    icon: ChevronRight,
-  },
+  pending: { next: 'done', label: 'Mark done', icon: Check },
+  done: { next: 'released', label: 'Release', icon: ArrowRight },
   released: null,
 }
 
@@ -55,12 +38,31 @@ function formatServices(items) {
 
 function orderCode(order) {
   if (order.order_number) return order.order_number
-
-  if (order.id) {
-    return order.id.toString().slice(-4).toUpperCase()
-  }
-
+  if (order.id) return order.id.toString().slice(-4).toUpperCase()
   return null
+}
+
+function StageRail({ status }) {
+  const stageIndex = STAGES.indexOf(status)
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
+        {STAGES.map((stage, i) => (
+          <span
+            key={stage}
+            className={`
+              w-1.5 h-1.5 rounded-full
+              ${i <= stageIndex ? 'bg-teal-600' : 'bg-stone-200'}
+            `}
+          />
+        ))}
+      </div>
+      <span className="text-xs font-medium text-stone-500">
+        {STAGE_LABEL[status]}
+      </span>
+    </div>
+  )
 }
 
 export default function OrderRow({
@@ -73,37 +75,20 @@ export default function OrderRow({
   const [updating, setUpdating] = useState(false)
   const [confirm, setConfirm] = useState(null)
 
-  const status =
-    STATUS_META[order.status] ?? STATUS_META.pending
-
   const advance = NEXT_ACTION[order.status]
-
   const isPaid = !!order.payment_status
-
-  const releaseBlocked =
-    advance?.next === 'released' && !isPaid
+  const releaseBlocked = advance?.next === 'released' && !isPaid
 
   const servicesSummary = formatServices(order.order_items)
   const code = orderCode(order)
 
   const runAdvance = async () => {
     setConfirm(null)
-
-    if (
-      !advance ||
-      updating ||
-      releaseBlocked
-    ) {
-      return
-    }
+    if (!advance || updating || releaseBlocked) return
 
     setUpdating(true)
-
     try {
-      await onUpdateStatus(
-        order.id,
-        advance.next
-      )
+      await onUpdateStatus(order.id, advance.next)
     } finally {
       setUpdating(false)
     }
@@ -111,11 +96,9 @@ export default function OrderRow({
 
   const runPay = async () => {
     setConfirm(null)
-
     if (updating) return
 
     setUpdating(true)
-
     try {
       await onMarkPaid(order.id)
     } finally {
@@ -125,7 +108,6 @@ export default function OrderRow({
 
   const askAdvance = e => {
     e.stopPropagation()
-
     if (!advance || releaseBlocked) return
 
     setConfirm({
@@ -139,7 +121,6 @@ export default function OrderRow({
 
   const askPay = e => {
     e.stopPropagation()
-
     if (updating) return
 
     setConfirm({
@@ -155,61 +136,36 @@ export default function OrderRow({
         className={`
           group
           grid
-          grid-cols-[1fr_1.6fr_90px_80px_90px_220px]
+          grid-cols-[1fr_1.6fr_90px_130px_150px_190px]
           px-4
           py-3.5
           text-sm
-          border-t
+          border-t border-stone-100
           items-center
           cursor-pointer
           transition-colors
 
-          ${
-            isActive
-              ? 'bg-blue-50/60 border-l-4 border-l-blue-500'
-              : 'hover:bg-neutral-50'
-          }
+          ${isActive ? 'bg-teal-50/50 border-l-2 border-l-teal-600' : 'hover:bg-stone-50'}
         `}
       >
         {/* CUSTOMER */}
         <div className="min-w-0 pr-3">
-          <p className="
-            font-semibold
-            text-neutral-900
-            truncate
-          ">
+          <p className="font-medium text-stone-900 truncate">
             {order.customer_name}
           </p>
-
-          <p className="
-            text-xs
-            text-neutral-400
-            mt-0.5
-          ">
+          <p className="text-xs text-stone-400 mt-0.5">
             {code ? `#${code} · ` : ''}
             {dayjs(order.created_at).fromNow()}
           </p>
         </div>
 
         {/* SERVICES */}
-        <div
-          className="
-            text-neutral-500
-            text-xs
-            truncate
-            pr-4
-          "
-          title={servicesSummary}
-        >
+        <div className="text-stone-500 text-xs truncate pr-4" title={servicesSummary}>
           {servicesSummary}
         </div>
 
         {/* TOTAL */}
-        <div className="
-          font-semibold
-          text-neutral-900
-          tabular-nums
-        ">
+        <div className="font-medium text-stone-900 tabular-nums">
           ₱{Number(order.total).toFixed(2)}
         </div>
 
@@ -217,122 +173,50 @@ export default function OrderRow({
         <div>
           <span
             className={`
-              inline-flex
-              items-center
-              gap-1
-              px-2
-              py-1
-              rounded-full
-              text-xs
-              font-semibold
+              inline-flex items-center gap-1
+              px-2 py-1 rounded-full
+              text-xs font-medium
 
-              ${
-                isPaid
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-red-50 text-red-700'
-              }
+              ${isPaid ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}
             `}
           >
-            {isPaid ? (
-              <CheckCircle2 size={12} />
-            ) : (
-              <CreditCard size={12} />
-            )}
-
+            {isPaid ? <CircleCheck size={12} /> : <Banknote size={12} />}
             {isPaid ? 'Paid' : 'Unpaid'}
           </span>
         </div>
 
-        {/* STATUS */}
-        <div>
-          <span
-            className={`
-              inline-flex
-              px-2
-              py-1
-              rounded-full
-              border
-              text-xs
-              font-semibold
-              ${status.badge}
-            `}
-          >
-            {status.label}
-          </span>
-        </div>
+        {/* STAGE */}
+        <StageRail status={order.status} />
 
         {/* ACTIONS */}
         <div
-          className="
-            flex
-            items-center
-            justify-end
-            gap-1.5
-          "
+          className="flex items-center justify-end gap-1.5"
           onClick={e => e.stopPropagation()}
         >
           {order.status === 'released' ? (
-
-            <span className="
-              text-xs
-              text-neutral-400
-              pr-2
-            ">
-              Completed
-            </span>
-
+            <span className="text-xs text-stone-400 pr-2">Completed</span>
           ) : (
-
             <>
-              {/* PAY */}
               {!isPaid && (
                 <ActionBtn
-                  label={
-                    updating
-                      ? '…'
-                      : 'Pay'
-                  }
-                  icon={CreditCard}
+                  label={updating ? '…' : 'Pay'}
+                  icon={Banknote}
                   disabled={updating}
-                  className="
-                    bg-green-600
-                    text-white
-                    hover:bg-green-700
-                  "
+                  className="bg-rose-50 text-rose-600 hover:bg-rose-100"
                   onClick={askPay}
                 />
               )}
 
-              {/* NEXT WORKFLOW ACTION */}
               {advance && (
                 <ActionBtn
-                  label={
-                    updating
-                      ? '…'
-                      : advance.label
-                  }
+                  label={updating ? '…' : advance.label}
                   icon={advance.icon}
-                  disabled={
-                    updating ||
-                    releaseBlocked
-                  }
-                  title={
-                    releaseBlocked
-                      ? 'Payment required before release'
-                      : undefined
-                  }
+                  disabled={updating || releaseBlocked}
+                  title={releaseBlocked ? 'Payment required before release' : undefined}
                   className={
                     releaseBlocked
-                      ? `
-                        bg-neutral-100
-                        text-neutral-400
-                        cursor-not-allowed
-                      `
-                      : `
-                        bg-blue-600
-                        text-white
-                        hover:bg-blue-700
-                      `
+                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      : 'bg-teal-600 text-white hover:bg-teal-700'
                   }
                   onClick={askAdvance}
                 />
@@ -342,7 +226,6 @@ export default function OrderRow({
         </div>
       </div>
 
-      {/* CONFIRM MODAL */}
       {confirm && (
         <ConfirmModal
           isOpen={true}
@@ -355,14 +238,7 @@ export default function OrderRow({
   )
 }
 
-function ActionBtn({
-  label,
-  icon: Icon,
-  onClick,
-  disabled,
-  className,
-  title,
-}) {
+function ActionBtn({ label, icon: Icon, onClick, disabled, className, title }) {
   return (
     <button
       type="button"
@@ -370,21 +246,15 @@ function ActionBtn({
       disabled={disabled}
       title={title}
       className={`
-        inline-flex
-        items-center
-        justify-center
-        gap-1.5
-        h-9
-        px-3
-        rounded-lg
-        text-xs
-        font-semibold
+        inline-flex items-center justify-center gap-1.5
+        h-9 px-3 rounded-lg
+        text-xs font-medium
         whitespace-nowrap
         transition
 
         focus:outline-none
         focus-visible:ring-2
-        focus-visible:ring-blue-500
+        focus-visible:ring-teal-500
 
         disabled:opacity-50
         disabled:cursor-not-allowed
