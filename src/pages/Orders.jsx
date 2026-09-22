@@ -524,8 +524,9 @@ export default function Orders() {
         </div>
 
         {/* MOBILE NAV */}
+        <div className="flex">
         <MobileNav onAddClick={handleNewOrder} />
-
+        </div>
         {/* NEW / EDIT ORDER FORM */}
         {(showForm || editingOrder) && (
           <NewOrderForm
