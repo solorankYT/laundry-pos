@@ -1,440 +1,261 @@
-  import { useEffect, useState } from 'react'
-  import dayjs from 'dayjs'
-  import relativeTime from 'dayjs/plugin/relativeTime'
-  import {
-    X,
-    Pencil,
-    Trash2,
-    Check,
-    Banknote,
-    ArrowRight,
-  } from 'lucide-react'
-  import ConfirmModal from '../ui/ConfirmModal'
+import { useEffect, useState } from 'react'
+import dayjs from 'dayjs'
+import { X, Pencil, Trash2, Banknote } from 'lucide-react'
+import {
+  MoneyLine,
+  OrderConfirm,
+  StageProgress,
+  peso,
+  orderCode,
+  useOrderQuickActions,
+} from './orderUi'
 
-  dayjs.extend(relativeTime)
+export default function OrderDrawer({
+  order,
+  onClose,
+  onUpdateStatus,
+  onMarkPaid,
+  onEdit,
+  onDelete,
+}) {
+  const [visible, setVisible] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
 
-  /*
-  * Order lifecycle is a real sequence, so it's shown as a
-  * three-step progress rail rather than a status pill.
-  */
-  const STAGES = ['pending', 'done', 'released']
+  const {
+    updating,
+    setUpdating,
+    confirm,
+    setConfirm,
+    isPaid,
+    advance,
+    releaseBlocked,
+    askAdvance,
+    askPay,
+  } = useOrderQuickActions({ order, onUpdateStatus, onMarkPaid })
 
-  const STAGE_LABEL = {
-    pending: 'Pending',
-    done: 'Done',
-    released: 'Released',
-  }
-
-  const NEXT_STAGE = {
-    pending: { next: 'done', cta: 'Mark as done' },
-    done: { next: 'released', cta: 'Release to customer' },
-    released: null,
-  }
-
-  function orderCode(order) {
-    if (order.order_number) return order.order_number
-    if (order.id) return order.id.toString().slice(-4).toUpperCase()
-    return null
-  }
-
-  function peso(n) {
-    return `₱${Number(n).toFixed(2)}`
-  }
-
-  export default function OrderDrawer({
-    order,
-    onClose,
-    onUpdateStatus,
-    onMarkPaid,
-    onEdit,
-    onDelete,
-  }) {
-    const [updating, setUpdating] = useState(false)
-    const [visible, setVisible] = useState(false)
-    const [confirm, setConfirm] = useState(null)
-    const [editingOrder, setEditingOrder] = useState(null)
-    const [showForm, setShowForm] = useState(false)
-    // { message, action }
-
-    useEffect(() => {
-      if (order) {
-        requestAnimationFrame(() => setVisible(true))
-      } else {
-        setVisible(false)
-      }
-    }, [order])
-
-    if (!order) return null
-
-    const isPaid = !!order.payment_status
-    const advance = NEXT_STAGE[order.status]
-    const releaseBlocked = advance?.next === 'released' && !isPaid
-    const stageIndex = STAGES.indexOf(order.status)
-    const code = orderCode(order)
-
-    const items = [
-      ...(order.order_items ?? []).map(item => ({
-        id: `item-${item.id}`,
-        name: item.service_name,
-        qty: item.quantity,
-        unit: Number(item.price),
-        subtotal: Number(item.price) * Number(item.quantity),
-      })),
-      ...(order.order_addons ?? []).map(addon => ({
-        id: `addon-${addon.id}`,
-        name: addon.addons?.name ?? 'Add-on',
-        qty: addon.quantity,
-        unit: Number(addon.unit_price),
-        subtotal: Number(addon.total),
-      })),
-    ]
-
-    const handleClose = () => {
+  useEffect(() => {
+    if (order) {
+      requestAnimationFrame(() => setVisible(true))
+    } else {
       setVisible(false)
-      setTimeout(onClose, 220)
     }
+  }, [order])
 
-    /* ---------------- status / payment ---------------- */
+  if (!order) return null
 
-    const runAdvance = async () => {
-      setConfirm(null)
-      if (!advance || updating || releaseBlocked) return
+  const code = orderCode(order)
 
-      setUpdating(true)
-      try {
-        await onUpdateStatus(order.id, advance.next)
-      } finally {
-        setUpdating(false)
-      }
-    }
+  const items = [
+    ...(order.order_items ?? []).map(item => ({
+      id: `item-${item.id}`,
+      name: item.service_name,
+      qty: item.quantity,
+      unit: Number(item.price),
+      subtotal: Number(item.price) * Number(item.quantity),
+    })),
+    ...(order.order_addons ?? []).map(addon => ({
+      id: `addon-${addon.id}`,
+      name: addon.addons?.name ?? 'Add-on',
+      qty: addon.quantity,
+      unit: Number(addon.unit_price),
+      subtotal: Number(addon.total),
+    })),
+  ]
 
-    const runPay = async () => {
-      setConfirm(null)
-      if (updating) return
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 220)
+  }
 
-      setUpdating(true)
-      try {
-        await onMarkPaid(order.id)
-      } finally {
-        setUpdating(false)
-      }
-    }
+  const handleEdit = () => {
+    if (updating) return
+    onEdit?.(order)
+  }
 
-    const askAdvance = () => {
-      if (!advance || updating || releaseBlocked) return
+  const handleDelete = () => {
+    if (updating) return
 
-      setConfirm({
-        message:
-          advance.next === 'released'
-            ? 'Release this order to the customer?'
-            : 'Mark this order as done?',
-        action: runAdvance,
-      })
-    }
+    setDeleteConfirm({
+      message:
+        'Delete this order permanently? This will also remove its services and add-ons.',
+      action: async () => {
+        setDeleteConfirm(null)
+        setUpdating(true)
+        try {
+          await onDelete?.(order.id)
+        } finally {
+          setUpdating(false)
+        }
+      },
+    })
+  }
 
-    const askPay = () => {
-      if (updating) return
+  const snapshotTone = isPaid
+    ? 'border-emerald-200 bg-emerald-50/60'
+    : 'border-rose-200 bg-rose-50/70'
 
-      setConfirm({
-        message: 'Mark this order as paid?',
-        action: runPay,
-      })
-    }
+  return (
+    <>
+      <div
+        onClick={handleClose}
+        className={`
+          fixed inset-0 z-40
+          bg-stone-900/35
+          transition-opacity duration-200
+          ${visible ? 'opacity-100' : 'opacity-0'}
+        `}
+      />
 
-    /* ---------------- edit / delete ---------------- */
+      <div
+        role="dialog"
+        aria-label={`Order for ${order.customer_name}`}
+        className={`
+          fixed z-50
+          bg-white
+          border-l border-stone-200
+          flex flex-col
 
-    const handleEdit = () => {
-      if (updating) return
-      onEdit?.(order)
-    }
+          inset-x-0
+          bottom-0
+          rounded-t-2xl
 
-    const handleDelete = () => {
-      if (updating) return
+          md:inset-y-0
+          md:right-0
+          md:left-auto
+          md:w-[420px]
+          md:rounded-none
 
-      setConfirm({
-        message:
-          'Delete this order permanently? This will also remove its services and add-ons.',
-        action: async () => {
-          setConfirm(null)
-          setUpdating(true)
-          try {
-            await onDelete?.(order.id)
-          } finally {
-            setUpdating(false)
+          transition-transform
+          duration-200
+          ease-out
+
+          ${
+            visible
+              ? 'translate-y-0 md:translate-x-0'
+              : 'translate-y-full md:translate-x-full'
           }
-        },
-      })
-    }
+        `}
+        style={{ maxHeight: '92vh' }}
+      >
+        <div className="flex justify-center pt-2.5 pb-1 md:hidden">
+          <div className="w-9 h-1 bg-stone-200 rounded-full" />
+        </div>
 
-    return (
-      <>
-        {/* BACKDROP */}
-        <div
-          onClick={handleClose}
-          className={`
-            fixed inset-0 z-40
-            bg-stone-900/35
-            transition-opacity duration-200
-            ${visible ? 'opacity-100' : 'opacity-0'}
-          `}
-        />
-
-        {/* DRAWER */}
-        <div
-          className={`
-            fixed z-50
-            bg-white
-            shadow-xl
-            flex flex-col
-
-            inset-x-0
-            bottom-0
-            rounded-t-3xl
-
-            md:inset-y-0
-            md:right-0
-            md:left-auto
-            md:w-[420px]
-            md:rounded-none
-
-            transition-transform
-            duration-220
-            ease-out
-
-            ${
-              visible
-                ? 'translate-y-0 md:translate-x-0'
-                : 'translate-y-full md:translate-x-full'
-            }
-          `}
-          style={{ maxHeight: '92vh' }}
-        >
-          {/* MOBILE DRAG HANDLE */}
-          <div className="flex justify-center pt-2.5 pb-1 md:hidden">
-            <div className="w-9 h-1 bg-stone-200 rounded-full" />
-          </div>
-
-          {/* HEADER */}
-          <div className="px-5 pt-3 pb-4 md:pt-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-semibold text-stone-900 text-lg truncate leading-tight">
-                  {order.customer_name}
+        <div className="px-5 pt-3 pb-4 md:pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-stone-900 text-lg truncate leading-tight">
+                {order.customer_name}
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                {code ? `Order #${code}` : 'Order'}
+                <span className="mx-1.5 text-stone-300">·</span>
+                {dayjs(order.created_at).format('MMM D, h:mm A')}
+              </p>
+              {order.created_by_email && (
+                <p className="text-xs text-stone-400 mt-0.5 truncate">
+                  Logged by {order.created_by_email}
                 </p>
-                <p className="text-xs text-stone-400 mt-1">
-                  {code ? `Order #${code}` : 'Order'}
-                  <span className="mx-1.5">·</span>
-                  {dayjs(order.created_at).format('MMM D, h:mm A')}
-                </p>
-                {order.created_by_email && (
-                  <p className="text-[11px] text-stone-350 text-stone-400/80 mt-0.5 truncate">
-                    Logged by {order.created_by_email}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {onEdit && (
-                  <button
-                    type="button"
-                    onClick={handleEdit}
-                    disabled={updating}
-                    aria-label="Edit order"
-                    className="
-                      w-9 h-9 flex items-center justify-center
-                      rounded-full text-stone-400
-                      hover:bg-stone-100 hover:text-stone-600
-                      active:bg-stone-100
-                      disabled:opacity-40
-                      transition
-                    "
-                  >
-                    <Pencil size={16} />
-                  </button>
-                )}
-
-                {onDelete && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={updating}
-                    aria-label="Delete order"
-                    className="
-                      w-9 h-9 flex items-center justify-center
-                      rounded-full text-stone-400
-                      hover:bg-rose-50 hover:text-rose-600
-                      active:bg-rose-50
-                      disabled:opacity-40
-                      transition
-                    "
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  aria-label="Close order"
-                  className="
-                    w-9 h-9 flex items-center justify-center
-                    rounded-full text-stone-500
-                    bg-stone-100
-                    hover:bg-stone-200
-                    active:bg-stone-200
-                    transition
-                  "
-                >
-                  <X size={17} />
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* STAGE RAIL */}
-            <div className="flex items-center mt-5">
-              {STAGES.map((stage, i) => {
-                const reached = i <= stageIndex
-                const isLast = i === STAGES.length - 1
-
-                return (
-                  <div key={stage} className="flex items-center flex-1 last:flex-none">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div
-                        className={`
-                          w-2.5 h-2.5 rounded-full transition-colors
-                          ${reached ? 'bg-teal-600' : 'bg-stone-200'}
-                        `}
-                      />
-                      <span
-                        className={`
-                          text-[11px] font-medium whitespace-nowrap
-                          ${reached ? 'text-stone-700' : 'text-stone-350 text-stone-400'}
-                        `}
-                      >
-                        {STAGE_LABEL[stage]}
-                      </span>
-                    </div>
-
-                    {!isLast && (
-                      <div
-                        className={`
-                          h-px flex-1 mx-2 -mt-4
-                          ${i < stageIndex ? 'bg-teal-600' : 'bg-stone-200'}
-                        `}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="h-px bg-stone-100" />
-
-          {/* CONTENT */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-            {/* PAYMENT */}
             <button
               type="button"
-              onClick={isPaid ? undefined : askPay}
-              disabled={isPaid || updating}
-              className={`
-                w-full flex items-center justify-between
-                rounded-2xl px-4 py-3.5
-                text-left transition
-
-                ${
-                  isPaid
-                    ? 'bg-emerald-50 cursor-default'
-                    : 'bg-rose-50 hover:bg-rose-100 active:bg-rose-100'
-                }
-              `}
+              onClick={handleClose}
+              aria-label="Close order"
+              className="
+                w-11 h-11 flex items-center justify-center
+                rounded-xl text-stone-600
+                bg-stone-100
+                hover:bg-stone-200
+                active:bg-stone-200
+              "
             >
-              <div className="flex items-center gap-2.5">
-                <Banknote
-                  size={18}
-                  className={isPaid ? 'text-emerald-600' : 'text-rose-500'}
-                />
-                <span
-                  className={`text-sm font-medium ${
-                    isPaid ? 'text-emerald-800' : 'text-rose-700'
-                  }`}
-                >
-                  {isPaid ? 'Paid' : 'Unpaid'}
-                </span>
-              </div>
-
-              {!isPaid && (
-                <span className="text-xs font-semibold text-rose-600">
-                  {updating ? 'Updating…' : 'Tap to mark paid'}
-                </span>
-              )}
+              <X size={18} />
             </button>
+          </div>
 
-            {/* ITEMS */}
-            <div>
-              <p className="text-xs font-medium text-stone-400 mb-2">
-                {items.length} {items.length === 1 ? 'item' : 'items'}
-              </p>
+          <div className={`mt-4 rounded-xl border px-4 py-3 ${snapshotTone}`}>
+            <MoneyLine total={order.total} paid={isPaid} size="lg" />
+            <div className="mt-2.5">
+              <StageProgress status={order.status} />
+            </div>
+          </div>
+        </div>
 
-              <div className="rounded-2xl border border-stone-100 divide-y divide-stone-100 overflow-hidden">
-                {items.length > 0 ? (
-                  items.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex justify-between items-center px-4 py-3"
-                    >
-                      <div className="min-w-0 pr-4">
-                        <p className="text-sm text-stone-800 truncate">{item.name}</p>
-                        <p className="text-xs text-stone-400 mt-0.5">
-                          ×{item.qty} @ {peso(item.unit)}
-                        </p>
-                      </div>
-                      <p className="text-sm font-medium text-stone-900 shrink-0 tabular-nums">
-                        {peso(item.subtotal)}
+        <div className="h-px bg-stone-100" />
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-stone-500 mb-2">
+              {items.length} {items.length === 1 ? 'item' : 'items'}
+            </p>
+
+            <div className="rounded-xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
+              {items.length > 0 ? (
+                items.map(item => (
+                  <div
+                    key={item.id}
+                    className="flex justify-between items-center px-3.5 py-3"
+                  >
+                    <div className="min-w-0 pr-4">
+                      <p className="text-sm text-stone-800 truncate">{item.name}</p>
+                      <p className="text-xs text-stone-500 mt-0.5">
+                        ×{item.qty} @ {peso(item.unit)}
                       </p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-stone-400 px-4 py-3">No items added</p>
-                )}
-              </div>
-            </div>
-
-            {/* NOTES */}
-            {order.notes && (
-              <div className="bg-amber-50 rounded-2xl px-4 py-3">
-                <p className="text-xs font-medium text-amber-700 mb-1">Note</p>
-                <p className="text-sm text-amber-900 leading-snug">{order.notes}</p>
-              </div>
-            )}
-
-            {/* TOTAL */}
-            <div className="flex justify-between items-center px-1 pt-1">
-              <span className="text-sm font-medium text-stone-500">Total</span>
-              <span className="text-2xl font-semibold text-stone-900 tabular-nums">
-                {peso(order.total)}
-              </span>
+                    <p className="text-sm font-semibold text-stone-900 shrink-0 tabular-nums">
+                      {peso(item.subtotal)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-stone-500 px-3.5 py-3">
+                  No items on this order
+                </p>
+              )}
             </div>
           </div>
 
-          {/* PRIMARY ACTION */}
-          <div className="px-5 pb-6 pt-3 border-t border-stone-100 bg-white">
-            {order.status === 'released' ? (
-              <p className="text-center text-sm text-stone-400 py-3">
-                Order completed
-              </p>
-            ) : (
-              <>
+          {order.notes && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+              <p className="text-xs font-semibold text-amber-800 mb-1">Note</p>
+              <p className="text-sm text-amber-950 leading-snug">{order.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 border-t border-stone-100 bg-white space-y-2">
+          {order.status !== 'released' && (
+            <>
+              {!isPaid && (
+                <button
+                  type="button"
+                  onClick={askPay}
+                  disabled={updating}
+                  className="
+                    w-full min-h-12 rounded-xl
+                    font-semibold text-sm
+                    flex items-center justify-center gap-2
+                    bg-rose-50 text-rose-700
+                    hover:bg-rose-100
+                    disabled:opacity-50
+                  "
+                >
+                  <Banknote size={17} />
+                  {updating ? 'Saving…' : 'Mark as paid'}
+                </button>
+              )}
+
+              {advance && (
                 <button
                   type="button"
                   onClick={askAdvance}
                   disabled={updating || releaseBlocked}
                   className={`
-                    w-full h-12 rounded-2xl
+                    w-full min-h-12 rounded-xl
                     font-semibold text-sm
-                    flex items-center justify-center gap-2
-                    active:scale-[0.98] transition-transform
+                    flex items-center justify-center
                     disabled:opacity-50
 
                     ${
@@ -444,33 +265,70 @@
                     }
                   `}
                 >
-                  {advance?.next === 'released' ? (
-                    <ArrowRight size={17} />
-                  ) : (
-                    <Check size={17} />
-                  )}
-                  {updating ? 'Updating…' : advance?.cta}
+                  {updating ? 'Saving…' : advance.label}
                 </button>
+              )}
 
-                {releaseBlocked && (
-                  <p className="text-center text-xs text-stone-400 mt-2">
-                    Mark this order as paid before releasing it.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+              {releaseBlocked && (
+                <p className="text-center text-xs text-stone-500">
+                  Mark as paid before releasing
+                </p>
+              )}
+            </>
+          )}
+
+          {order.status === 'released' && (
+            <p className="text-center text-sm font-medium text-stone-500 py-2">
+              This order has been released
+            </p>
+          )}
+
+          {(onEdit || onDelete) && (
+            <div className="flex gap-2 pt-1">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  disabled={updating}
+                  className="
+                    flex-1 min-h-11 rounded-xl
+                    text-sm font-semibold
+                    text-stone-700 bg-stone-100
+                    hover:bg-stone-200
+                    disabled:opacity-40
+                    flex items-center justify-center gap-1.5
+                  "
+                >
+                  <Pencil size={15} />
+                  Edit order
+                </button>
+              )}
+
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={updating}
+                  className="
+                    flex-1 min-h-11 rounded-xl
+                    text-sm font-semibold
+                    text-rose-700 bg-rose-50
+                    hover:bg-rose-100
+                    disabled:opacity-40
+                    flex items-center justify-center gap-1.5
+                  "
+                >
+                  <Trash2 size={15} />
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* CONFIRM MODAL */}
-        {confirm && (
-          <ConfirmModal
-            isOpen={true}
-            message={confirm.message}
-            onConfirm={confirm.action}
-            onCancel={() => setConfirm(null)}
-          />
-        )}
-      </>
-    )
-  }
+      <OrderConfirm confirm={confirm} onCancel={() => setConfirm(null)} />
+      <OrderConfirm confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} />
+    </>
+  )
+}

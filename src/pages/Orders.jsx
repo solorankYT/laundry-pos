@@ -7,6 +7,7 @@ import OrderCard from '../components/orders/OrderCard'
 import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
 import OrdersSidebar from '../components/layout/OrdersSidebar'
+import { ORDER_ROW_GRID } from '../components/orders/orderUi'
 
 import { Search, X, Plus, ClipboardList, SearchX } from 'lucide-react'
 import { MobileNav } from '../components/layout/MobileNav'
@@ -434,14 +435,14 @@ export default function Orders() {
           {loading ? (
             <>
               {/* Desktop skeleton */}
-              <div className="hidden md:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden">
+              <div className="hidden lg:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <SkeletonRow key={i} />
                 ))}
               </div>
 
               {/* Mobile skeleton */}
-              <div className="md:hidden px-3 pt-3 pb-28 space-y-2.5">
+              <div className="lg:hidden px-3 pt-3 pb-28 space-y-2.5">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <SkeletonCard key={i} />
                 ))}
@@ -464,26 +465,24 @@ export default function Orders() {
           ) : (
             <>
               {/* Desktop table */}
-              <div className="hidden md:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden shadow-sm">
+              <div className="hidden lg:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden shadow-sm">
 
-                <div className="
-                  grid
-                  grid-cols-[1fr_1.6fr_90px_80px_90px_150px]
+                <div className={`
+                  grid ${ORDER_ROW_GRID}
                   text-[11px]
                   font-semibold
-                  text-neutral-400
+                  text-stone-500
                   uppercase
                   tracking-wide
                   px-4 py-2.5
                   border-b
-                  bg-neutral-50
-                ">
+                  bg-stone-50
+                `}>
                   <span>Customer</span>
                   <span>Services</span>
-                  <span>Total</span>
-                  <span>Payment</span>
+                  <span>Total / payment</span>
                   <span>Status</span>
-                  <span>Actions</span>
+                  <span className="text-right">Actions</span>
                 </div>
 
                 {displayedOrders.map(order => (
@@ -502,7 +501,7 @@ export default function Orders() {
               </div>
 
               {/* Mobile cards */}
-              <div className="md:hidden px-3 pt-3 pb-28 space-y-2.5">
+              <div className="lg:hidden px-3 pt-3 pb-28 space-y-2.5">
 
                 {displayedOrders.map(order => (
                   <OrderCard
@@ -566,40 +565,36 @@ function SkeletonCard() {
       animate-pulse
       space-y-3
     ">
-      <div className="flex justify-between">
-        <div className="h-3.5 w-28 bg-neutral-200 rounded" />
-        <div className="h-3.5 w-14 bg-neutral-200 rounded" />
+      <div className="flex justify-between items-start">
+        <div className="space-y-1.5">
+          <div className="h-3.5 w-28 bg-neutral-200 rounded" />
+          <div className="h-3 w-24 bg-neutral-100 rounded" />
+        </div>
+        <div className="h-5 w-14 bg-neutral-100 rounded-md" />
       </div>
 
+      <div className="h-6 w-32 bg-neutral-200 rounded" />
       <div className="h-3 w-40 bg-neutral-100 rounded" />
 
-      <div className="flex justify-between">
-        <div className="h-3 w-16 bg-neutral-100 rounded" />
-        <div className="h-3 w-12 bg-neutral-100 rounded" />
-      </div>
-
-      <div className="h-9 w-full bg-neutral-100 rounded-lg" />
+      <div className="h-11 w-full bg-neutral-100 rounded-xl" />
     </div>
   )
 }
 
 function SkeletonRow() {
   return (
-    <div className="
-      grid
-      grid-cols-[1fr_1.6fr_90px_80px_90px_150px]
+    <div className={`
+      grid ${ORDER_ROW_GRID}
       items-center
-      gap-4
       px-4 py-3.5
       border-t
       animate-pulse
-    ">
+    `}>
       <div className="h-3.5 w-24 bg-neutral-200 rounded" />
       <div className="h-3 w-32 bg-neutral-100 rounded" />
-      <div className="h-3.5 w-14 bg-neutral-200 rounded" />
-      <div className="h-5 w-14 bg-neutral-100 rounded-full" />
-      <div className="h-5 w-14 bg-neutral-100 rounded-full" />
-      <div className="h-8 w-20 bg-neutral-100 rounded-lg" />
+      <div className="h-3.5 w-28 bg-neutral-200 rounded" />
+      <div className="h-5 w-14 bg-neutral-100 rounded-md" />
+      <div className="h-10 w-28 bg-neutral-100 rounded-lg ml-auto" />
     </div>
   )
 }
