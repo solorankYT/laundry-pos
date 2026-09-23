@@ -19,6 +19,25 @@ const TABS = [
   { key: 'all', label: 'All' },
 ]
 
+const ORDER_SELECT = `
+  *,
+  order_items(
+    id,
+    service_id,
+    service_name,
+    price,
+    quantity
+  ),
+  order_addons(
+    id,
+    addon_id,
+    quantity,
+    unit_price,
+    total,
+    addons(name)
+  )
+`
+
 const SORT_PRIORITY = (a, b) => {
   if (!a.payment_status && b.payment_status) return -1
   if (a.payment_status && !b.payment_status) return 1
@@ -55,24 +74,7 @@ export default function Orders() {
 
     const { data, error } = await supabase
       .from('orders')
-      .select(`
-        *,
-        order_items(
-          id,
-          service_id,
-          service_name,
-          price,
-          quantity
-        ),
-        order_addons(
-          id,
-          addon_id,
-          quantity,
-          unit_price,
-          total,
-          addons(name)
-        )
-      `)
+      .select(ORDER_SELECT)
       .order('created_at', { ascending: false })
 
     if (!error && data) {
@@ -205,10 +207,17 @@ export default function Orders() {
   /*
    * Open Edit Order form.
    */
-  const handleEditOrder = order => {
+  const handleEditOrder = async order => {
     setSelectedOrder(null)
     setShowForm(false)
-    setEditingOrder(order)
+
+    const { data, error } = await supabase
+      .from('orders')
+      .select(ORDER_SELECT)
+      .eq('id', order.id)
+      .single()
+
+    setEditingOrder(!error && data ? data : order)
   }
 
   /*
@@ -529,6 +538,7 @@ export default function Orders() {
         {/* NEW / EDIT ORDER FORM */}
         {(showForm || editingOrder) && (
           <NewOrderForm
+            key={editingOrder?.id ?? 'new'}
             order={editingOrder}
             onClose={() => {
               setShowForm(false)

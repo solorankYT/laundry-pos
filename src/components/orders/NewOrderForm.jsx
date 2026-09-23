@@ -50,22 +50,38 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
 
     const svcMap = {}
     ;(order.order_items ?? []).forEach(item => {
-      svcMap[item.service_id] = {
-        id: item.service_id,
+      const key = item.service_id
+      if (key == null) return
+
+      if (svcMap[key]) {
+        svcMap[key].quantity += Number(item.quantity) || 0
+        return
+      }
+
+      svcMap[key] = {
+        id: key,
         name: item.service_name,
         price: Number(item.price),
-        quantity: item.quantity,
+        quantity: Number(item.quantity) || 0,
       }
     })
     setSelectedServices(svcMap)
 
     const addonMap = {}
     ;(order.order_addons ?? []).forEach(a => {
-      addonMap[a.addon_id] = {
-        id: a.addon_id,
+      const key = a.addon_id
+      if (key == null) return
+
+      if (addonMap[key]) {
+        addonMap[key].quantity += Number(a.quantity) || 0
+        return
+      }
+
+      addonMap[key] = {
+        id: key,
         name: a.addons?.name ?? 'Add-on',
         price: Number(a.unit_price),
-        quantity: a.quantity,
+        quantity: Number(a.quantity) || 0,
       }
     })
     setSelectedAddons(addonMap)
@@ -291,6 +307,13 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   }
 
   const submitEdit = async () => {
+    if (!Number.isFinite(total)) {
+      throw new Error('Invalid total')
+    }
+
+    const oldItemIds = (order.order_items ?? []).map(item => item.id).filter(Boolean)
+    const oldAddonIds = (order.order_addons ?? []).map(addon => addon.id).filter(Boolean)
+
     const { error: orderErr } = await supabase
       .from('orders')
       .update({
@@ -303,22 +326,23 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
 
     if (orderErr) throw orderErr
 
-    // Replace existing line items rather than trying to diff them.
-    const { error: delItemsErr } = await supabase
-      .from('order_items')
-      .delete()
-      .eq('order_id', order.id)
+    if (oldAddonIds.length) {
+      await supabase.from('order_addons').delete().in('id', oldAddonIds)
+    }
 
-    if (delItemsErr) throw delItemsErr
-
-    const { error: delAddonsErr } = await supabase
-      .from('order_addons')
-      .delete()
-      .eq('order_id', order.id)
-
-    if (delAddonsErr) throw delAddonsErr
+    if (oldItemIds.length) {
+      await supabase.from('order_items').delete().in('id', oldItemIds)
+    }
 
     await insertLineItems(order.id)
+
+    if (oldItemIds.length) {
+      await supabase.from('order_items').delete().in('id', oldItemIds)
+    }
+
+    if (oldAddonIds.length) {
+      await supabase.from('order_addons').delete().in('id', oldAddonIds)
+    }
   }
 
   const insertLineItems = async (orderId) => {
