@@ -1,12 +1,7 @@
 import { getAddonStats } from '../../lib/dashboardData';
 import { formatPeso } from '../../lib/dateRanges';
-import type { Order } from '../../lib/types';
 
-interface Props {
-  orders: Order[];
-}
-
-export default function AddonPerformance({ orders }: Props) {
+export default function AddonPerformance({ orders }) {
   const stats = getAddonStats(orders);
   const totalRevenue = stats.reduce((s, a) => s + a.revenue, 0);
 
