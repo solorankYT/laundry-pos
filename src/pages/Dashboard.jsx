@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMenu } from 'react-icons/fi';
-import OrdersSidebar from '../components/layout/OrdersSidebar';
 
 import DateRangeSelector from '../components/dashboard/DateRangeSelector';
 import ExportButton from '../components/dashboard/ExportButton';
 import ExportDialog from '../components/dashboard/ExportDialog';
-import KPICard from '../components/dashboard/KPICard';
+import KPIRow from '../components/dashboard/KPIRow';
 import RevenueChart from '../components/dashboard/RevenueChart';
 import OrdersOverview from '../components/dashboard/OrdersOverview';
 import NeedsAttention from '../components/dashboard/NeedsAttention';
@@ -15,12 +13,22 @@ import PaymentSummary from '../components/dashboard/PaymentSummary';
 import AddonPerformance from '../components/dashboard/AddonPerformance';
 import TodaysOrders from '../components/dashboard/TodaysOrders';
 
-import { getRangeForPreset, formatRangeLabel, formatPeso } from '../lib/dateRanges';
+import { getRangeForPreset } from '../lib/dateRanges';
 import { getKpiSummary } from '../lib/dashboardData';
 
+/**
+ * Renders inside <AppLayout>, which already provides the sidebar (tablet+),
+ * mobile top bar, and mobile bottom nav — this component is just the page
+ * content, so it doesn't manage its own nav/sidebar state.
+ *
+ * Section order below is authored mobile-first (matches the brief's
+ * recommended mobile priority: KPIs → today's orders → needs attention →
+ * revenue → overview → services → payments → add-ons). `lg:order-*` then
+ * rearranges the same elements into the desktop grid — nothing is
+ * duplicated, so there's one layout to maintain, not two.
+ */
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preset, setPreset] = useState('today');
   const [customRange, setCustomRange] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -42,6 +50,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.start.getTime(), range.end.getTime()]);
 
   function handleRangeChange(newPreset, newCustom) {
@@ -56,107 +65,75 @@ export default function Dashboard() {
   const today = new Date();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <OrdersSidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+    <div className="p-4 sm:p-5 lg:p-6 max-w-[1400px] mx-auto">
+      {/* Header — stacks on the smallest phones, row from `sm` up */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {today.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ExportButton onClick={() => setExportOpen(true)} />
+          <DateRangeSelector preset={preset} customRange={customRange} onChange={handleRangeChange} />
+        </div>
+      </div>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black opacity-50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+      {error && (
+        <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg p-4 mb-4">
+          We couldn't load your dashboard.{' '}
+          <button className="underline" onClick={() => setPreset((p) => p)}>
+            Try again.
+          </button>
+        </div>
       )}
 
-      <main className="flex-1 flex flex-col ml-0 p-4 md:p-6 overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <div className="flex items-center gap-2 md:hidden mb-2">
-              <button className="p-2 rounded bg-gray-900 text-white" onClick={() => setSidebarOpen(!sidebarOpen)}>
-                <FiMenu size={18} />
-              </button>
-            </div>
-            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {today.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
+      {loading ? (
+        <DashboardSkeleton />
+      ) : kpi ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* 1. KPI row — swipeable carousel on phones, grid from sm up */}
+          <div className="lg:order-1 lg:col-span-3">
+            <KPIRow kpi={kpi} preset={preset} onSelect={goToOrders} />
           </div>
-          <div className="flex items-center gap-2">
-            <ExportButton onClick={() => setExportOpen(true)} />
-            <DateRangeSelector preset={preset} customRange={customRange} onChange={handleRangeChange} />
+
+          {/* 2. Today's orders — high mobile priority, full width everywhere */}
+          <div className="lg:order-8 lg:col-span-3">
+            <TodaysOrders orders={kpi.orders} />
+          </div>
+
+          {/* 3. Needs attention */}
+          <div className="lg:order-4 lg:col-span-1">
+            <NeedsAttention orders={kpi.orders} onSelect={goToOrders} />
+          </div>
+
+          {/* 4. Revenue chart */}
+          <div className="lg:order-2 lg:col-span-2">
+            <RevenueChart orders={kpi.orders} />
+          </div>
+
+          {/* 5. Orders overview (compact status bars) */}
+          <div className="lg:order-3 lg:col-span-1">
+            <OrdersOverview orders={kpi.orders} onSelectStatus={goToOrders} />
+          </div>
+
+          {/* 6. Popular services */}
+          <div className="lg:order-5 lg:col-span-1">
+            <PopularServices orders={kpi.orders} />
+          </div>
+
+          {/* 7. Payment summary */}
+          <div className="lg:order-6 lg:col-span-1">
+            <PaymentSummary orders={kpi.orders} onSelectUnpaid={() => goToOrders('unpaid')} />
+          </div>
+
+          {/* 8. Add-ons */}
+          <div className="lg:order-7 lg:col-span-1">
+            <AddonPerformance orders={kpi.orders} />
           </div>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg p-4 mb-4">
-            We couldn't load your dashboard.{' '}
-            <button className="underline" onClick={() => setPreset((p) => p)}>
-              Try again.
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <DashboardSkeleton />
-        ) : kpi ? (
-          <>
-            {/* Level 1 — KPI row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-              <KPICard
-                label={preset === 'today' ? "Today's Sales" : 'Sales'}
-                value={formatPeso(kpi.revenue)}
-                trendPct={kpi.trend.revenue}
-              />
-              <KPICard
-                label="Orders"
-                value={String(kpi.totalOrders)}
-                sublines={[`${kpi.releasedCount} completed`, `${kpi.pendingCount + kpi.readyCount} active`]}
-              />
-              <KPICard
-                label="Pending Orders"
-                value={String(kpi.pendingCount)}
-                sublines={[`${kpi.pendingWashing} washing`, `${kpi.pendingProcessing} drying/folding`]}
-                onClick={() => goToOrders('pending')}
-              />
-              <KPICard
-                label="Ready for Release"
-                value={`${kpi.readyCount} Orders`}
-                sublines={['Customers can pick these up']}
-                highlight="positive"
-                onClick={() => goToOrders('ready')}
-              />
-              <KPICard
-                label="Unpaid Orders"
-                value={formatPeso(kpi.unpaidAmount)}
-                sublines={[`${kpi.unpaidCount} unpaid orders`]}
-                highlight="urgent"
-                onClick={() => goToOrders('unpaid')}
-              />
-            </div>
-
-            {/* Level 2 — Revenue + Orders overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-              <div className="lg:col-span-2">
-                <RevenueChart orders={kpi.orders} />
-              </div>
-              <OrdersOverview orders={kpi.orders} onSelectStatus={goToOrders} />
-            </div>
-
-            {/* Needs Attention + Popular Services */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <NeedsAttention orders={kpi.orders} onSelect={goToOrders} />
-              <PopularServices orders={kpi.orders} />
-            </div>
-
-            {/* Today's orders */}
-            <div className="mb-4">
-              <TodaysOrders orders={kpi.orders} />
-            </div>
-
-            {/* Level 3 — supporting */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <PaymentSummary orders={kpi.orders} onSelectUnpaid={() => goToOrders('unpaid')} />
-              <AddonPerformance orders={kpi.orders} />
-            </div>
-          </>
-        ) : null}
-      </main>
+      ) : null}
 
       <ExportDialog
         open={exportOpen}
@@ -171,9 +148,9 @@ export default function Dashboard() {
 function DashboardSkeleton() {
   return (
     <div className="animate-pulse space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="flex gap-3 overflow-x-auto sm:grid sm:grid-cols-3 lg:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-24 bg-gray-100 rounded-lg" />
+          <div key={i} className="h-24 w-[42vw] sm:w-auto shrink-0 bg-gray-100 rounded-lg" />
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
