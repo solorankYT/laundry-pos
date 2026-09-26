@@ -21,7 +21,7 @@ const TABS = [
 
 const ORDER_SELECT = `
   *,
-  order_items(
+  order_items(      
     id,
     service_id,
     service_name,
