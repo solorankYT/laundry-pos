@@ -1,7 +1,7 @@
 import { FiHome, FiList, FiDollarSign, FiLogOut } from 'react-icons/fi';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import MobileBottomNav from './MobileBottomNav';
+import MobileNav from './MobileNav';
 
 export default function AppLayout({ children }) {
   const { user, signOut } = useAuth();
@@ -83,7 +83,7 @@ export default function AppLayout({ children }) {
 
         <main className="flex-1 overflow-y-auto flex flex-col">
           <div className="flex-1">{children}</div>
-          <MobileBottomNav navItems={visibleNavItems} />
+          <MobileNav navItems={visibleNavItems} />
         </main>
       </div>
     </div>

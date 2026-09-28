@@ -10,7 +10,6 @@ import OrdersSidebar from '../components/layout/OrdersSidebar'
 import { ORDER_ROW_GRID } from '../components/orders/orderUi'
 
 import { Search, X, Plus, ClipboardList, SearchX } from 'lucide-react'
-import { MobileNav } from '../components/layout/MobileNav'
 
 const TABS = [
   { key: 'pending', label: 'Pending' },
@@ -531,10 +530,6 @@ export default function Orders() {
 
         </div>
 
-        {/* MOBILE NAV */}
-        <div className="flex">
-        <MobileNav onAddClick={handleNewOrder} />
-        </div>
         {/* NEW / EDIT ORDER FORM */}
         {(showForm || editingOrder) && (
           <NewOrderForm
