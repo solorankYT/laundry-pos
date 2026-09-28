@@ -1,24 +1,31 @@
 import { NavLink } from 'react-router-dom'
-import { Home, ClipboardMinus, Plus, User, ChartLine } from 'lucide-react'
+import { Home, ClipboardMinus, ChartLine } from 'lucide-react'
 
 const links = [
-  { to: '/', label: 'Home', icon: Home, end: true },
-  { to: '/orders', label: 'Orders', icon: ClipboardMinus },
-  { to: '/reports', label: 'Reports', icon: ChartLine },
-  { to: '/customers', label: 'Customers', icon: User },
-
+  {
+    to: '/dashboard',
+    label: 'Home',
+    icon: Home,
+    end: true,
+  },
+  {
+    to: '/orders',
+    label: 'Orders',
+    icon: ClipboardMinus,
+  },
+  {
+    to: '/reports',
+    label: 'Reports',
+    icon: ChartLine,
+  },
 ]
 
-export function MobileNav({ onAddClick }) {
+export default function MobileNav() {
   return (
     <>
-      {/* Reserved space for the fixed mobile navigation */}
+      {/* Reserve space for fixed navigation */}
       <div
-        className="
-          lg:hidden
-          h-24
-          shrink-0
-        "
+        className="lg:hidden h-24 shrink-0"
         aria-hidden="true"
       />
 
@@ -33,8 +40,8 @@ export function MobileNav({ onAddClick }) {
           gap-2
           lg:hidden
         "
+        aria-label="Mobile navigation"
       >
-        {/* Navigation */}
         <div
           className="
             flex
@@ -79,30 +86,6 @@ export function MobileNav({ onAddClick }) {
             </NavLink>
           ))}
         </div>
-
-        {/* New Order */}
-        <button
-          type="button"
-          onClick={onAddClick}
-          aria-label="New Order"
-          className="
-            flex
-            h-14
-            w-14
-            shrink-0
-            items-center
-            justify-center
-            rounded-full
-            bg-pine
-            text-black
-            shadow-lg
-            shadow-pine/30
-            transition-transform
-            active:scale-95
-          "
-        >
-          <Plus size={24} strokeWidth={2.5} />
-        </button>
       </nav>
     </>
   )
