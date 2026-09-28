@@ -32,7 +32,7 @@ export default function App() {
             user
               ? role === 'manager'
                 ? <Navigate to="/dashboard" replace />
-                : <Navigate to="/orders" replace />
+                : <Navigate to="/home" replace />
               : <Navigate to="/login" replace />
           }
         />

@@ -307,43 +307,60 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   }
 
   const submitEdit = async () => {
-    if (!Number.isFinite(total)) {
-      throw new Error('Invalid total')
-    }
+  if (!Number.isFinite(total)) {
+    throw new Error('Invalid total')
+  }
 
-    const oldItemIds = (order.order_items ?? []).map(item => item.id).filter(Boolean)
-    const oldAddonIds = (order.order_addons ?? []).map(addon => addon.id).filter(Boolean)
+  const oldItemIds = (order.order_items ?? [])
+    .map(item => item.id)
+    .filter(Boolean)
 
-    const { error: orderErr } = await supabase
-      .from('orders')
-      .update({
-        customer_name: customerName.trim(),
-        payment_status: paymentStatus,
-        notes: notes.trim() || null,
-        total,
-      })
-      .eq('id', order.id)
+  const oldAddonIds = (order.order_addons ?? [])
+    .map(addon => addon.id)
+    .filter(Boolean)
 
-    if (orderErr) throw orderErr
+  // 1. Update the existing order
+  const { error: orderErr } = await supabase
+    .from('orders')
+    .update({
+      customer_name: customerName.trim(),
+      payment_status: paymentStatus,
+      notes: notes.trim() || null,
+      total,
+    })
+    .eq('id', order.id)
 
-    if (oldAddonIds.length) {
-      await supabase.from('order_addons').delete().in('id', oldAddonIds)
-    }
+  if (orderErr) {
+    throw orderErr
+  }
 
-    if (oldItemIds.length) {
-      await supabase.from('order_items').delete().in('id', oldItemIds)
-    }
+  // 2. Delete old add-ons
+  if (oldAddonIds.length) {
+    const { error: addonDeleteErr } = await supabase
+      .from('order_addons')
+      .delete()
+      .in('id', oldAddonIds)
 
-    await insertLineItems(order.id)
-
-    if (oldItemIds.length) {
-      await supabase.from('order_items').delete().in('id', oldItemIds)
-    }
-
-    if (oldAddonIds.length) {
-      await supabase.from('order_addons').delete().in('id', oldAddonIds)
+    if (addonDeleteErr) {
+      throw addonDeleteErr
     }
   }
+
+  // 3. Delete old service items
+  if (oldItemIds.length) {
+    const { error: itemDeleteErr } = await supabase
+      .from('order_items')
+      .delete()
+      .in('id', oldItemIds)
+
+    if (itemDeleteErr) {
+      throw itemDeleteErr
+    }
+  }
+
+  // 4. Insert the current form items
+  await insertLineItems(order.id)
+}
 
   const insertLineItems = async (orderId) => {
     if (serviceCount > 0) {

@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { ClipboardList, History, Plus, Users } from 'lucide-react'
+import { Home, ClipboardMinus, Plus, User, ChartLine } from 'lucide-react'
 
 const links = [
-  { to: '/', label: 'Queue', icon: ClipboardList, end: true },
-  { to: '/accounts', label: 'Accounts', icon: Users },
-  { to: '/transactions', label: 'History', icon: History },
+  { to: '/', label: 'Home', icon: Home, end: true },
+  { to: '/orders', label: 'Orders', icon: ClipboardMinus },
+  { to: '/reports', label: 'Reports', icon: ChartLine },
+  { to: '/customers', label: 'Customers', icon: User },
+
 ]
 
 export function MobileNav({ onAddClick }) {
