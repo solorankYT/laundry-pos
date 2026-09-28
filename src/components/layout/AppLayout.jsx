@@ -1,31 +1,43 @@
-import { FiHome, FiList, FiDollarSign, FiLogOut } from 'react-icons/fi';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import MobileNav from './MobileNav';
+import { FiHome, FiList, FiDollarSign, FiLogOut } from 'react-icons/fi'
+import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
+import MobileBottomNav from './MobileBottomNav'
 
-export default function AppLayout({ children }) {
-  const { user, signOut } = useAuth();
+export default function AppLayout() {
+  const { user, role, signOut } = useAuth()
 
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: FiHome, admin: true },
-    { label: 'Orders', path: '/orders', icon: FiList },
-    { label: 'Payments', path: '/payments', icon: FiDollarSign },
-  ];
+    {
+      label: 'Dashboard',
+      path: '/dashboard',
+      icon: FiHome,
+      admin: true,
+    },
+    {
+      label: 'Orders',
+      path: '/orders',
+      icon: FiList,
+    },
+    {
+      label: 'Payments',
+      path: '/payments',
+      icon: FiDollarSign,
+    },
+  ]
 
-  const visibleNavItems = navItems.filter((item) => !item.admin || user?.is_admin);
+  const visibleNavItems = navItems.filter(
+    (item) => !item.admin || role === 'manager'
+  )
 
   return (
     <div className="min-h-screen bg-stone-50 flex">
-      {/*
-        SIDEBAR
-        - tablet (md): slim icon rail, so the content keeps ~700px of width
-        - desktop (lg): full sidebar with labels
-      */}
+      {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col shrink-0 md:w-[72px] lg:w-60 h-screen sticky top-0 bg-white border-r border-stone-200 px-3 py-4">
         <div className="mb-6 flex h-10 items-center gap-2.5 px-1.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-sm font-semibold text-white">
             L
           </span>
+
           <span className="hidden lg:block truncate text-[15px] font-semibold text-stone-900">
             Laundry POS
           </span>
@@ -47,7 +59,9 @@ export default function AppLayout({ children }) {
               }
             >
               <Icon size={18} className="shrink-0" />
-              <span className="hidden lg:inline">{label}</span>
+              <span className="hidden lg:inline">
+                {label}
+              </span>
             </NavLink>
           ))}
         </nav>
@@ -56,6 +70,7 @@ export default function AppLayout({ children }) {
           <p className="hidden lg:block truncate px-1.5 pb-1 text-xs text-stone-400">
             {user?.email}
           </p>
+
           <button
             type="button"
             onClick={signOut}
@@ -64,28 +79,39 @@ export default function AppLayout({ children }) {
             className="flex h-11 w-full items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-stone-500 transition-colors hover:bg-rose-50 hover:text-rose-600 md:justify-center lg:justify-start"
           >
             <FiLogOut size={18} className="shrink-0" />
-            <span className="hidden lg:inline">Logout</span>
+
+            <span className="hidden lg:inline">
+              Logout
+            </span>
           </button>
         </div>
       </aside>
 
       {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* TOP BAR (phones only) — respects the notch / status bar */}
+
+        {/* MOBILE HEADER */}
         <div className="md:hidden bg-white border-b border-stone-200 px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-semibold text-white">
               L
             </span>
-            <h1 className="font-semibold text-stone-900">Laundry POS</h1>
+
+            <h1 className="font-semibold text-stone-900">
+              Laundry POS
+            </h1>
           </div>
         </div>
 
+        {/* PAGE CONTENT */}
         <main className="flex-1 overflow-y-auto flex flex-col">
-          <div className="flex-1">{children}</div>
-          <MobileNav navItems={visibleNavItems} />
+          <div className="flex-1">
+            <Outlet />
+          </div>
+
+          <MobileBottomNav navItems={visibleNavItems} />
         </main>
       </div>
     </div>
-  );
+  )
 }
