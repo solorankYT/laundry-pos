@@ -1,7 +1,7 @@
 import { FiHome, FiList, FiDollarSign, FiLogOut } from 'react-icons/fi'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import MobileBottomNav from './MobileBottomNav'
+import MobileNav from './MobileNav'
 
 export default function AppLayout() {
   const { user, role, signOut } = useAuth()
@@ -31,8 +31,10 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-stone-50 flex">
+
       {/* SIDEBAR */}
       <aside className="hidden md:flex flex-col shrink-0 md:w-[72px] lg:w-60 h-screen sticky top-0 bg-white border-r border-stone-200 px-3 py-4">
+
         <div className="mb-6 flex h-10 items-center gap-2.5 px-1.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-sm font-semibold text-white">
             L
@@ -59,6 +61,7 @@ export default function AppLayout() {
               }
             >
               <Icon size={18} className="shrink-0" />
+
               <span className="hidden lg:inline">
                 {label}
               </span>
@@ -109,7 +112,8 @@ export default function AppLayout() {
             <Outlet />
           </div>
 
-          <MobileBottomNav navItems={visibleNavItems} />
+          {/* MOBILE NAV */}
+          <MobileNav />
         </main>
       </div>
     </div>
