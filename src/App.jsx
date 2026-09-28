@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
+import AppLayout from './components/layout/AppLayout'
 import Login from './pages/Login'
 import Orders from './pages/Orders'
 import Dashboard from './pages/Dashboard'
@@ -7,16 +8,34 @@ import User from './pages/User'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        Loading...
+      </div>
+    )
+  }
+
   if (!user) return <Navigate to="/login" replace />
+
   return children
 }
 
 function ManagerRoute({ children }) {
   const { user, role, loading } = useAuth()
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        Loading...
+      </div>
+    )
+  }
+
   if (!user) return <Navigate to="/login" replace />
   if (role !== 'manager') return <Navigate to="/orders" replace />
+
   return children
 }
 
@@ -32,24 +51,40 @@ export default function App() {
             user
               ? role === 'manager'
                 ? <Navigate to="/dashboard" replace />
-                : <Navigate to="/home" replace />
+                : <Navigate to="/orders" replace />
               : <Navigate to="/login" replace />
           }
         />
 
         <Route path="/login" element={<Login />} />
 
-        <Route path="/orders" element={
-          <ProtectedRoute><Orders /></ProtectedRoute>
-        } />
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/orders" element={<Orders />} />
 
-        <Route path="/users" element={
-          <ManagerRoute><User /></ManagerRoute>
-        } />
+          <Route
+            path="/users"
+            element={
+              <ManagerRoute>
+                <User />
+              </ManagerRoute>
+            }
+          />
 
-        <Route path="/dashboard" element={
-          <ManagerRoute><Dashboard /></ManagerRoute>
-        } />
+          <Route
+            path="/dashboard"
+            element={
+              <ManagerRoute>
+                <Dashboard />
+              </ManagerRoute>
+            }
+          />
+        </Route>
       </Routes>
     </BrowserRouter>
   )
