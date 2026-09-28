@@ -397,7 +397,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-50">
+   <div className="fixed inset-0 z-[60] flex flex-col bg-neutral-50">
 
       {/* HEADER */}
       <header className="shrink-0 bg-white border-b border-neutral-200 px-4 py-3.5">
