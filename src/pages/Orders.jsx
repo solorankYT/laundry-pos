@@ -8,7 +8,7 @@ import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
 import OrdersSidebar from '../components/layout/OrdersSidebar'
 import { ORDER_ROW_GRID } from '../components/orders/orderUi'
-
+import { useSearchParams } from 'react-router-dom'
 import { Search, X, Plus, ClipboardList, SearchX } from 'lucide-react'
 
 const TABS = [
@@ -56,6 +56,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('pending')
   const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // New order
   const [showForm, setShowForm] = useState(false)
@@ -67,6 +68,17 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState(null)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+
+  useEffect(() => {
+  if (searchParams.get('action') === 'new') {
+    handleNewOrder()
+
+    // Remove ?action=new from URL
+    setSearchParams({}, { replace: true })
+  }
+}, [searchParams])
+
 
   const fetchOrders = async () => {
     setLoading(true)

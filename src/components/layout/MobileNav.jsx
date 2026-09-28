@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { Home, ClipboardMinus, ChartLine } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Home, ClipboardMinus, ChartLine, Plus } from 'lucide-react'
 
 const links = [
   {
@@ -21,15 +21,22 @@ const links = [
 ]
 
 export default function MobileNav() {
+  const navigate = useNavigate()
+
+  const handleAddOrder = () => {
+    navigate('/orders?action=new')
+  }
+
   return (
     <>
-      {/* Reserve space for fixed navigation */}
+      {/* Reserved space for fixed mobile navigation */}
       <div
         className="lg:hidden h-24 shrink-0"
         aria-hidden="true"
       />
 
       <nav
+        aria-label="Mobile navigation"
         className="
           fixed
           inset-x-4
@@ -40,8 +47,8 @@ export default function MobileNav() {
           gap-2
           lg:hidden
         "
-        aria-label="Mobile navigation"
       >
+        {/* Navigation */}
         <div
           className="
             flex
@@ -86,6 +93,30 @@ export default function MobileNav() {
             </NavLink>
           ))}
         </div>
+
+        {/* ADD ORDER */}
+        <button
+          type="button"
+          onClick={handleAddOrder}
+          aria-label="Add Order"
+          className="
+            flex
+            h-14
+            w-14
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-pine
+            text-black
+            shadow-lg
+            shadow-pine/30
+            transition-transform
+            active:scale-95
+          "
+        >
+          <Plus size={24} strokeWidth={2.5} />
+        </button>
       </nav>
     </>
   )
