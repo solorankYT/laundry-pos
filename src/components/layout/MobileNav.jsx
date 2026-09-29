@@ -14,7 +14,7 @@ const links = [
     icon: ClipboardMinus,
   },
   {
-    to: '/reports',
+    to: '/',
     label: 'Reports',
     icon: ChartLine,
   },
@@ -57,14 +57,12 @@ export default function MobileNav() {
             gap-1
             rounded-full
             border
-            border-line/60
-            bg-surface/90
+            border-stone-200
+            bg-white/95
             p-1.5
             shadow-lg
-            shadow-ink/10
+            shadow-black/10
             backdrop-blur-xl
-            backdrop-saturate-150
-            supports-[backdrop-filter]:bg-surface/75
           "
         >
           {links.map(({ to, label, icon: Icon, end }) => (
@@ -76,20 +74,24 @@ export default function MobileNav() {
               className={({ isActive }) =>
                 `flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-2 transition-colors ${
                   isActive
-                    ? 'bg-pine-soft text-pine'
-                    : 'text-ink/65 active:bg-black/5'
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-stone-500 active:bg-stone-100 active:text-stone-700'
                 }`
               }
             >
-              <Icon
-                size={19}
-                strokeWidth={2.25}
-                aria-hidden="true"
-              />
+              {({ isActive }) => (
+                <>
+                  <Icon
+                    size={19}
+                    strokeWidth={isActive ? 2.4 : 2.1}
+                    aria-hidden="true"
+                  />
 
-              <span className="text-[10px] font-semibold leading-none">
-                {label}
-              </span>
+                  <span className="text-[10px] font-semibold leading-none">
+                    {label}
+                  </span>
+                </>
+              )}
             </NavLink>
           ))}
         </div>
@@ -107,10 +109,10 @@ export default function MobileNav() {
             items-center
             justify-center
             rounded-full
-            bg-pine
-            text-black
+            bg-blue-600
+            text-white
             shadow-lg
-            shadow-pine/30
+            shadow-blue-600/30
             transition-transform
             active:scale-95
           "
