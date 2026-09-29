@@ -72,9 +72,9 @@ export default function Dashboard() {
       {/* HEADER */}
       <div className="flex items-center justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-white">
+          <p className="text-xl font-semibold text-gray-900 sm:text-2xl">
             Dashboard
-          </h1>
+          </p>
 
           <p className="text-sm text-gray-400 mt-0.5">
             {today.toLocaleDateString('en-PH', {

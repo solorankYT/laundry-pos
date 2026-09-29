@@ -47,80 +47,121 @@ export default function OrderCard({
           overflow-hidden
           cursor-pointer
           text-left
+          transition-colors
 
-          ${isActive ? 'border-teal-400 bg-teal-50/40' : 'border-stone-200 active:bg-stone-50'}
+          ${
+            isActive
+              ? 'border-blue-300 bg-blue-50/40'
+              : 'border-blue-100 hover:border-blue-200 active:bg-blue-50/40'
+          }
         `}
       >
+        {/* ORDER INFO */}
         <div className="px-4 pt-3.5 pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[15px] font-semibold text-stone-900 truncate leading-tight">
+              <p className="text-[15px] font-semibold text-slate-900 truncate leading-tight">
                 {order.customer_name}
               </p>
-              <p className="text-xs text-stone-500 mt-0.5">
+
+              <p className="text-xs text-slate-500 mt-0.5">
                 {code ? `#${code}` : 'Order'}
-                <span className="mx-1 text-stone-300">·</span>
+                <span className="mx-1 text-slate-300">·</span>
                 {dayjs(order.created_at).fromNow()}
               </p>
             </div>
+
             <OrderStatus status={order.status} />
           </div>
 
+          {/* TOTAL */}
           <div className="mt-3">
             <MoneyLine total={order.total} paid={isPaid} />
           </div>
 
-          <p className="mt-2 text-[13px] text-stone-500 truncate">
+          {/* SERVICES */}
+          <p className="mt-2 text-[13px] text-slate-500 truncate">
             {formatServices(order.order_items)}
           </p>
         </div>
 
+        {/* ACTIONS */}
         <div
           className="px-3 pb-3"
           onClick={e => e.stopPropagation()}
           onKeyDown={e => e.stopPropagation()}
         >
           {order.status === 'released' ? (
-            <p className="text-center text-xs font-medium text-stone-400 py-2.5">
-              Order released
-            </p>
+            <div className="rounded-lg bg-slate-50 py-2.5 text-center">
+              <p className="text-xs font-medium text-slate-400">
+                Order released
+              </p>
+            </div>
           ) : (
             <>
               <div className="flex gap-2">
+                {/* MARK AS PAID */}
                 {!isPaid && (
                   <button
                     type="button"
                     onClick={askPay}
                     disabled={updating}
                     className="
-                      flex-1 min-h-11 rounded-xl
-                      text-sm font-semibold
-                      bg-rose-50 text-rose-700
+                      flex-1
+                      min-h-11
+                      rounded-xl
+                      text-sm
+                      font-semibold
+                      bg-rose-50
+                      text-rose-600
+                      border border-rose-100
                       flex items-center justify-center gap-1.5
+                      transition-colors
+                      hover:bg-rose-100
                       active:bg-rose-100
                       disabled:opacity-50
                     "
                   >
                     <Banknote size={16} />
+
                     {updating ? 'Saving…' : 'Mark as paid'}
                   </button>
                 )}
 
+                {/* ADVANCE STATUS */}
                 {advance && (
                   <button
                     type="button"
                     onClick={askAdvance}
                     disabled={updating || releaseBlocked}
-                    title={releaseBlocked ? 'Payment required before release' : undefined}
+                    title={
+                      releaseBlocked
+                        ? 'Payment required before release'
+                        : undefined
+                    }
                     className={`
-                      flex-1 min-h-11 rounded-xl
-                      text-sm font-semibold
+                      flex-1
+                      min-h-11
+                      rounded-xl
+                      text-sm
+                      font-semibold
+                      transition-colors
                       disabled:opacity-50
 
                       ${
                         releaseBlocked
-                          ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                          : 'bg-teal-600 text-white active:bg-teal-700'
+                          ? `
+                            bg-slate-100
+                            text-slate-400
+                            border border-slate-200
+                            cursor-not-allowed
+                          `
+                          : `
+                            bg-blue-600
+                            text-white
+                            hover:bg-blue-700
+                            active:bg-blue-700
+                          `
                       }
                     `}
                   >
@@ -129,8 +170,9 @@ export default function OrderCard({
                 )}
               </div>
 
+              {/* PAYMENT REQUIREMENT */}
               {releaseBlocked && (
-                <p className="text-center text-xs text-stone-500 mt-2">
+                <p className="text-center text-xs text-slate-500 mt-2">
                   Mark as paid before releasing
                 </p>
               )}
@@ -139,7 +181,10 @@ export default function OrderCard({
         </div>
       </div>
 
-      <OrderConfirm confirm={confirm} onCancel={() => setConfirm(null)} />
+      <OrderConfirm
+        confirm={confirm}
+        onCancel={() => setConfirm(null)}
+      />
     </>
   )
 }
