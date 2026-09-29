@@ -6,10 +6,15 @@ import OrderRow from '../components/orders/OrderRow'
 import OrderCard from '../components/orders/OrderCard'
 import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
-import OrdersSidebar from '../components/layout/OrdersSidebar'
 import { ORDER_ROW_GRID } from '../components/orders/orderUi'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X, Plus, ClipboardList, SearchX } from 'lucide-react'
+import {
+  Search,
+  X,
+  Plus,
+  ClipboardList,
+  SearchX,
+} from 'lucide-react'
 
 const TABS = [
   { key: 'pending', label: 'Pending' },
@@ -58,27 +63,16 @@ export default function Orders() {
   const [search, setSearch] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // New order
   const [showForm, setShowForm] = useState(false)
-
-  // Edit order
   const [editingOrder, setEditingOrder] = useState(null)
-
-  // Selected order drawer
   const [selectedOrder, setSelectedOrder] = useState(null)
 
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-
-
   useEffect(() => {
-  if (searchParams.get('action') === 'new') {
-    handleNewOrder()
-
-    // Remove ?action=new from URL
-    setSearchParams({}, { replace: true })
-  }
-}, [searchParams])
-
+    if (searchParams.get('action') === 'new') {
+      handleNewOrder()
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams])
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -135,9 +129,6 @@ export default function Orders() {
     }
   }, [user, filter])
 
-  /*
-   * Keep the drawer synchronized with realtime/order updates.
-   */
   useEffect(() => {
     if (!selectedOrder) return
 
@@ -150,9 +141,6 @@ export default function Orders() {
     }
   }, [orders])
 
-  /*
-   * Update order status.
-   */
   const updateStatus = async (id, status) => {
     setOrders(prev =>
       prev.map(order =>
@@ -180,9 +168,6 @@ export default function Orders() {
     await fetchOrders()
   }
 
-  /*
-   * Mark order as paid.
-   */
   const markPaid = async id => {
     setOrders(prev =>
       prev.map(order =>
@@ -206,18 +191,12 @@ export default function Orders() {
     await fetchOrders()
   }
 
-  /*
-   * Open New Order form.
-   */
   const handleNewOrder = () => {
     setSelectedOrder(null)
     setEditingOrder(null)
     setShowForm(true)
   }
 
-  /*
-   * Open Edit Order form.
-   */
   const handleEditOrder = async order => {
     setSelectedOrder(null)
     setShowForm(false)
@@ -231,15 +210,8 @@ export default function Orders() {
     setEditingOrder(!error && data ? data : order)
   }
 
-  /*
-   * Delete an order and its related items/add-ons.
-   *
-   * We delete the children first because order_items
-   * and order_addons may reference the order.
-   */
   const handleDeleteOrder = async orderId => {
     try {
-      // Delete order add-ons
       const { error: addonsError } = await supabase
         .from('order_addons')
         .delete()
@@ -247,7 +219,6 @@ export default function Orders() {
 
       if (addonsError) throw addonsError
 
-      // Delete order items
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
@@ -255,7 +226,6 @@ export default function Orders() {
 
       if (itemsError) throw itemsError
 
-      // Delete the order
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
@@ -273,9 +243,6 @@ export default function Orders() {
     }
   }
 
-  /*
-   * After creating or editing an order.
-   */
   const handleFormCreated = async () => {
     setShowForm(false)
     setEditingOrder(null)
@@ -291,13 +258,12 @@ export default function Orders() {
     : orders
 
   return (
-    <div className="flex h-screen bg-neutral-50">
-
+    <div className="flex h-screen bg-blue-50/50">
 
       <main className="flex-1 ml-0 flex flex-col overflow-hidden relative">
 
         {/* SEARCH + NEW ORDER */}
-        <div className="bg-white border-b px-4 py-3 flex items-center gap-3">
+        <div className="bg-white border-b border-blue-100 px-4 py-3 flex items-center gap-3">
 
           <div className="flex-1 relative">
 
@@ -305,7 +271,8 @@ export default function Orders() {
               size={16}
               className="
                 absolute left-3 top-1/2 -translate-y-1/2
-                text-neutral-400 pointer-events-none
+                text-slate-400
+                pointer-events-none
               "
             />
 
@@ -319,10 +286,10 @@ export default function Orders() {
                 w-full h-10
                 pl-9 pr-9
                 rounded-lg
-                border border-neutral-200
-                bg-neutral-50
-                text-sm text-neutral-900
-                placeholder:text-neutral-400
+                border border-blue-100
+                bg-blue-50/40
+                text-sm text-slate-900
+                placeholder:text-slate-400
                 focus:outline-none
                 focus:bg-white
                 focus:border-blue-400
@@ -345,9 +312,9 @@ export default function Orders() {
                   w-5 h-5
                   flex items-center justify-center
                   rounded-full
-                  text-neutral-400
-                  hover:bg-neutral-200
-                  hover:text-neutral-600
+                  text-slate-400
+                  hover:bg-blue-50
+                  hover:text-slate-600
                   transition
                 "
               >
@@ -379,72 +346,84 @@ export default function Orders() {
 
         </div>
 
-   {/* FILTER TABS */}
-      <div className="bg-white border-b border-stone-200 px-4 py-2.5 flex gap-1.5 overflow-x-auto">
+        {/* FILTER TABS */}
+        <div className="
+          bg-white
+          border-b border-blue-100
+          px-4 py-2.5
+          flex gap-1.5
+          overflow-x-auto
+        ">
+          {TABS.map(tab => {
+            const count = counts[tab.key]
+            const isActive = filter === tab.key
 
-        {TABS.map(tab => {
-          const count = counts[tab.key]
-          const isActive = filter === tab.key
+            return (
+              <button
+                type="button"
+                key={tab.key}
+                onClick={() => {
+                  setFilter(tab.key)
+                  setSearch('')
+                }}
+                className={`
+                  shrink-0
+                  flex items-center gap-1.5
+                  h-9 px-3.5
+                  rounded-full
+                  text-sm font-medium
+                  transition-colors
 
-          return (
-            <button
-              type="button"
-              key={tab.key}
-              onClick={() => {
-                setFilter(tab.key)
-                setSearch('')
-              }}
-              className={`
-                shrink-0
-                flex items-center gap-1.5
-                h-9 px-3.5
-                rounded-full
-                text-sm font-medium
-                transition-colors
+                  ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-50 text-slate-500 hover:bg-blue-100 hover:text-slate-700'
+                  }
+                `}
+              >
+                {tab.label}
 
-                ${
-                  isActive
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                }
-              `}
-            >
-              {tab.label}
+                {typeof count === 'number' && count > 0 && (
+                  <span
+                    className={`
+                      text-[11px]
+                      font-semibold
+                      min-w-[18px]
+                      px-1
+                      rounded-full
+                      leading-[1.4]
+                      text-center
+                      tabular-nums
 
-              {typeof count === 'number' && count > 0 && (
-                <span
-                  className={`
-                    text-[11px]
-                    font-semibold
-                    min-w-[18px]
-                    px-1
-                    rounded-full
-                    leading-[1.4]
-                    text-center
-                    tabular-nums
+                      ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-white text-slate-400'
+                      }
+                    `}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
 
-                    ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-white text-stone-400'
-                    }
-                  `}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-
-      </div>
         {/* ORDER LIST */}
         <div className="flex-1 overflow-y-auto">
 
           {loading ? (
             <>
               {/* Desktop skeleton */}
-              <div className="hidden lg:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden">
+              <div className="
+                hidden lg:block
+                bg-white
+                rounded-xl
+                border border-blue-100
+                mx-4 mt-4
+                overflow-hidden
+              ">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <SkeletonRow key={i} />
                 ))}
@@ -473,19 +452,27 @@ export default function Orders() {
 
           ) : (
             <>
-              {/* Desktop table */}
-              <div className="hidden lg:block bg-white rounded-xl border mx-4 mt-4 overflow-hidden shadow-sm">
+              {/* DESKTOP TABLE */}
+              <div className="
+                hidden lg:block
+                bg-white
+                rounded-xl
+                border border-blue-100
+                mx-4 mt-4
+                overflow-hidden
+                shadow-sm
+              ">
 
                 <div className={`
                   grid ${ORDER_ROW_GRID}
                   text-[11px]
                   font-semibold
-                  text-stone-500
+                  text-slate-500
                   uppercase
                   tracking-wide
                   px-4 py-2.5
-                  border-b
-                  bg-stone-50
+                  border-b border-blue-100
+                  bg-blue-50/50
                 `}>
                   <span>Customer</span>
                   <span>Services</span>
@@ -509,9 +496,14 @@ export default function Orders() {
 
               </div>
 
-              {/* Mobile cards */}
-              <div className="lg:hidden px-3 pt-3 pb-28 space-y-2.5">
-
+              {/* MOBILE CARDS */}
+              <div className="
+                lg:hidden
+                px-3
+                pt-3
+                pb-28
+                space-y-2.5
+              ">
                 {displayedOrders.map(order => (
                   <OrderCard
                     key={order.id}
@@ -524,7 +516,6 @@ export default function Orders() {
                     isActive={selectedOrder?.id === order.id}
                   />
                 ))}
-
               </div>
             </>
           )}
@@ -566,23 +557,24 @@ function SkeletonCard() {
     <div className="
       bg-white
       rounded-xl
-      border border-neutral-200
+      border border-blue-100
       p-4
       animate-pulse
       space-y-3
     ">
       <div className="flex justify-between items-start">
         <div className="space-y-1.5">
-          <div className="h-3.5 w-28 bg-neutral-200 rounded" />
-          <div className="h-3 w-24 bg-neutral-100 rounded" />
+          <div className="h-3.5 w-28 bg-slate-200 rounded" />
+          <div className="h-3 w-24 bg-slate-100 rounded" />
         </div>
-        <div className="h-5 w-14 bg-neutral-100 rounded-md" />
+
+        <div className="h-5 w-14 bg-blue-50 rounded-md" />
       </div>
 
-      <div className="h-6 w-32 bg-neutral-200 rounded" />
-      <div className="h-3 w-40 bg-neutral-100 rounded" />
+      <div className="h-6 w-32 bg-slate-200 rounded" />
+      <div className="h-3 w-40 bg-slate-100 rounded" />
 
-      <div className="h-11 w-full bg-neutral-100 rounded-xl" />
+      <div className="h-11 w-full bg-blue-50 rounded-xl" />
     </div>
   )
 }
@@ -593,14 +585,14 @@ function SkeletonRow() {
       grid ${ORDER_ROW_GRID}
       items-center
       px-4 py-3.5
-      border-t
+      border-t border-blue-50
       animate-pulse
     `}>
-      <div className="h-3.5 w-24 bg-neutral-200 rounded" />
-      <div className="h-3 w-32 bg-neutral-100 rounded" />
-      <div className="h-3.5 w-28 bg-neutral-200 rounded" />
-      <div className="h-5 w-14 bg-neutral-100 rounded-md" />
-      <div className="h-10 w-28 bg-neutral-100 rounded-lg ml-auto" />
+      <div className="h-3.5 w-24 bg-slate-200 rounded" />
+      <div className="h-3 w-32 bg-slate-100 rounded" />
+      <div className="h-3.5 w-28 bg-slate-200 rounded" />
+      <div className="h-5 w-14 bg-blue-50 rounded-md" />
+      <div className="h-10 w-28 bg-blue-50 rounded-lg ml-auto" />
     </div>
   )
 }
@@ -617,18 +609,18 @@ function NoResults({ query, onClear }) {
       <div className="
         w-11 h-11
         rounded-full
-        bg-neutral-100
+        bg-blue-50
         flex items-center justify-center
         mb-3
       ">
-        <SearchX size={20} className="text-neutral-400" />
+        <SearchX size={20} className="text-blue-400" />
       </div>
 
-      <p className="text-neutral-700 font-medium text-sm">
+      <p className="text-slate-700 font-medium text-sm">
         No results for "{query}"
       </p>
 
-      <p className="text-neutral-400 text-xs mt-1 mb-4">
+      <p className="text-slate-400 text-xs mt-1 mb-4">
         Try a different name
       </p>
 
@@ -637,11 +629,11 @@ function NoResults({ query, onClear }) {
         onClick={onClear}
         className="
           h-9 px-4
-          bg-neutral-100
-          text-neutral-700
+          bg-blue-50
+          text-blue-700
           rounded-lg
           text-sm font-semibold
-          hover:bg-neutral-200
+          hover:bg-blue-100
           transition
         "
       >
@@ -663,21 +655,21 @@ function EmptyState({ filter, onNewOrder }) {
       <div className="
         w-11 h-11
         rounded-full
-        bg-neutral-100
+        bg-blue-50
         flex items-center justify-center
         mb-3
       ">
         <ClipboardList
           size={20}
-          className="text-neutral-400"
+          className="text-blue-400"
         />
       </div>
 
-      <p className="text-neutral-700 font-medium text-sm">
+      <p className="text-slate-700 font-medium text-sm">
         No {filter !== 'all' ? filter : ''} orders
       </p>
 
-      <p className="text-neutral-400 text-xs mt-1 mb-4">
+      <p className="text-slate-400 text-xs mt-1 mb-4">
         {filter === 'pending'
           ? 'New laundry orders will appear here'
           : 'Try a different filter'}
@@ -693,6 +685,7 @@ function EmptyState({ filter, onNewOrder }) {
             text-white
             rounded-lg
             text-sm font-semibold
+            hover:bg-blue-700
             active:scale-[0.98]
             transition
           "
@@ -700,7 +693,6 @@ function EmptyState({ filter, onNewOrder }) {
           New Order
         </button>
       )}
-
     </div>
   )
 }
