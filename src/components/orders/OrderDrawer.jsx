@@ -95,7 +95,8 @@ export default function OrderDrawer({
     : 'border-rose-200 bg-rose-50/70'
 
   return (
-    <>
+    
+    <div className="fixed inset-0 z-[60] flex flex-col bg-neutral-50">
       <div
         onClick={handleClose}
         className={`
@@ -329,6 +330,6 @@ export default function OrderDrawer({
 
       <OrderConfirm confirm={confirm} onCancel={() => setConfirm(null)} />
       <OrderConfirm confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} />
-    </>
+    </div>
   )
 }
