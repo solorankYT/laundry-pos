@@ -293,19 +293,8 @@ export default function Orders() {
   return (
     <div className="flex h-screen bg-neutral-50">
 
-      <OrdersSidebar
-        isOpen={sidebarOpen}
-        toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-      />
 
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <main className="flex-1 ml-0 md:ml-64 flex flex-col overflow-hidden relative">
+      <main className="flex-1 ml-0 flex flex-col overflow-hidden relative">
 
         {/* SEARCH + NEW ORDER */}
         <div className="bg-white border-b px-4 py-3 flex items-center gap-3">

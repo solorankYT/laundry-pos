@@ -69,7 +69,7 @@ export default function Dashboard() {
       {/* Header — stacks on the smallest phones, row from `sm` up */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-white ">Dashboard</h1>
           <p className="text-sm text-gray-400 mt-0.5">
             {today.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>

@@ -93,18 +93,7 @@ export default function AppLayout() {
       {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
 
-        {/* MOBILE HEADER */}
-        <div className="md:hidden bg-white border-b border-stone-200 px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600 text-xs font-semibold text-white">
-              L
-            </span>
-
-            <h1 className="font-semibold text-stone-900">
-              Laundry POS
-            </h1>
-          </div>
-        </div>
+   
 
         {/* PAGE CONTENT */}
         <main className="flex-1 overflow-y-auto flex flex-col">
