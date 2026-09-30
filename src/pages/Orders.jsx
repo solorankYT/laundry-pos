@@ -675,6 +675,8 @@ function EmptyState({ filter, onNewOrder }) {
           : 'Try a different filter'}
       </p>
 
+
+      
       {filter === 'pending' && (
         <button
           type="button"
