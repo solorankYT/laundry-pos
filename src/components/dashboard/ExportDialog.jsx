@@ -3,7 +3,7 @@ import { FiDownload, FiX } from 'react-icons/fi';
 import { getRangeForPreset, formatRangeLabel, isValidCustomRange, PRESETS } from '../../lib/dateRanges';
 
 const REPORT_OPTIONS = [
-  { key: 'daily_summary', label: 'Daily Summary', hint: 'Cash, GCash, and outstanding balances by day' },
+  { key: 'daily_summary', label: 'Daily Summary', hint: 'Collections, outstanding balances, and adjustments by day' },
   { key: 'sales', label: 'Sales', hint: 'Daily totals and individual collections' },
   { key: 'orders', label: 'Orders', hint: 'Order list with status' },
   { key: 'services', label: 'Services', hint: 'Performance by service' },

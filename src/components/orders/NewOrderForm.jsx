@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { PAYMENT_METHODS, orderActionError, isRejectedOrderWrite } from './orderData'
+import CheckoutFields from './CheckoutFields'
+import { checkoutDraft, checkoutQuote, orderActionError, isRejectedOrderWrite, peso } from './orderData'
 import {
   X,
   Zap,
@@ -47,7 +48,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   const [customerName, setCustomerName] = useState(order?.customer_name ?? '')
   const [customerPhone, setCustomerPhone] = useState(order?.customer_phone ?? '')
   const [pickupTime, setPickupTime] = useState(toManilaInput(order?.pickup_at))
-  const [paymentMethod, setPaymentMethod] = useState('')
+  const [checkout, setCheckout] = useState(() => checkoutDraft('full', order, 'later'))
   const [notes, setNotes] = useState(order?.notes ?? '')
   const [showNotes, setShowNotes] = useState(Boolean(order?.notes))
   const [submitting, setSubmitting] = useState(false)
@@ -236,9 +237,10 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   )
 
   const itemCount = serviceCount + addonCount
+  const quote = checkoutQuote(checkout, total)
 
   const handleSubmit = async () => {
-    if (submittingRef.current || catalogState !== 'ready') return
+    if (submittingRef.current || catalogState !== 'ready' || !quote.canSubmit) return
     const errors = {}
 
     if (!customerName.trim()) errors.name = 'Enter customer name'
@@ -258,9 +260,12 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
       p_notes: notes.trim() || null,
       p_items: Object.values(selectedServices).map(({ id, quantity }) => ({ id, quantity })),
       p_addons: Object.values(selectedAddons).map(({ id, quantity }) => ({ id, quantity })),
-      p_payment_method: paymentMethod || null,
-      p_expected_total: Number(total.toFixed(2)),
+      p_payment_method: quote.method,
+      p_expected_total: quote.subtotal,
       p_expected_updated_at: order?.updated_at ?? null,
+      p_discount_amount: quote.complimentary ? null : quote.discountAmount,
+      p_adjustment_reason: quote.reason,
+      p_complimentary: quote.complimentary,
     }
 
     submittingRef.current = true
@@ -593,19 +598,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         </div>
 
         <div className="h-4" />
-        {!isEditing && (
-          <label className="block text-sm font-medium text-neutral-700">
-            Payment at drop-off
-            <select
-              className="mt-1 block h-11 w-full rounded-lg border border-neutral-200 bg-white px-3"
-              value={paymentMethod}
-              onChange={event => setPaymentMethod(event.target.value)}
-            >
-              <option value="">Pay at pickup</option>
-              {PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}
-            </select>
-          </label>
-        )}
+        <CheckoutFields draft={checkout} quote={quote} onChange={setCheckout} allowLater deferOnly={isEditing} />
         </fieldset>
       </main>
 
@@ -694,7 +687,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
               tabular-nums
               tracking-tight
             ">
-              ₱{total.toFixed(2)}
+              {quote.validDiscount ? peso(quote.total) : '—'}
             </p>
           </div>
 
@@ -705,7 +698,8 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
               submitting ||
               !serviceCount ||
               !customerName.trim() ||
-              catalogState !== 'ready'
+              catalogState !== 'ready' ||
+              !quote.canSubmit
             }
             className="
               min-h-[54px]
@@ -987,4 +981,4 @@ function CartRow({ item, onMinus, onPlus }) {
       </div>
     </div>
   )
-} 
+}

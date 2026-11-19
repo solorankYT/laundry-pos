@@ -2,7 +2,10 @@ import * as XLSX from 'xlsx';
 import {
   fetchReportData,
   getDailyClose,
+  getOrderSubtotal,
   getServiceStats,
+  hasOutstandingBalance,
+  isComplimentary,
   ORDER_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
   summarizeReport,
@@ -11,13 +14,13 @@ import { businessDateKey, BUSINESS_TIME_ZONE, formatRangeLabel, formatDateTime }
 
 const PESO_FMT = '"₱"#,##0.00';
 
-function reportSheet(title, rangeLabel, columns, rows, { currencyCols = [], total } = {}) {
+function reportSheet(title, rangeLabel, columns, rows, { currencyCols = [], total, note } = {}) {
   const headerRow = 4;
   const headings = [
     [title],
     [rangeLabel + ' (Asia/Manila)'],
     [`Generated ${new Date().toLocaleString('en-PH', { timeZone: BUSINESS_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short' })}`],
-    [],
+    note ? [note] : [],
     columns,
   ];
   const ws = XLSX.utils.aoa_to_sheet([...headings, ...rows, ...(total ? [total] : [])]);
@@ -37,13 +40,25 @@ function reportSheet(title, rangeLabel, columns, rows, { currencyCols = [], tota
   return ws;
 }
 
+function paymentLabel(order) {
+  if (order.status === 'cancelled') return 'Voided';
+  if (isComplimentary(order)) return 'Complimentary';
+  if (Number(order.total) === 0) return 'No charge';
+  return order.payment_status ? 'Paid' : 'Unpaid';
+}
+
 function orderDetails(orders, rangeLabel) {
-  const columns = ['Claim Number', 'Date', 'Time', 'Customer', 'Services', 'Add-ons', 'Order Value', 'Balance Due', 'Payment', 'Status', 'Opened By'];
+  const columns = [
+    'Claim Number', 'Date', 'Time', 'Customer', 'Services', 'Add-ons', 'Net Order Value',
+    'Balance Due', 'Payment', 'Status', 'Opened By', 'Value Before Adjustments',
+    'Discount Amount', 'Complimentary Value', 'Adjustment Reason', 'Adjustment Approved At',
+  ];
   const rows = orders.map((order) => {
     const { date, time } = formatDateTime(order.created_at);
     const services = order.order_items?.map((item) => `${item.service_name} ×${item.quantity}`).join(', ');
     const addons = order.order_addons?.map((item) => `${item.addon_name ?? 'Add-on'} ×${item.quantity}`).join(', ');
-    const isVoided = order.status === 'cancelled';
+    const complimentary = isComplimentary(order);
+    const adjustment = order.discount_at ? formatDateTime(order.discount_at) : null;
     return [
       order.order_number ?? order.id,
       date,
@@ -52,13 +67,21 @@ function orderDetails(orders, rangeLabel) {
       services ?? '',
       addons ?? '',
       Number(order.total),
-      isVoided || order.payment_status ? 0 : Number(order.total),
-      isVoided ? 'Voided' : order.payment_status ? 'Paid' : 'Unpaid',
+      hasOutstandingBalance(order) ? Number(order.total) : 0,
+      paymentLabel(order),
       ORDER_STATUS_LABELS[order.status] ?? order.status,
       order.created_by_email ?? '',
+      getOrderSubtotal(order),
+      complimentary ? 0 : Number(order.discount_amount ?? 0),
+      complimentary ? Number(order.discount_amount) : 0,
+      order.discount_reason ?? '',
+      adjustment ? `${adjustment.date} ${adjustment.time}` : '',
     ];
   });
-  return reportSheet('Orders opened in this period', rangeLabel, columns, rows, { currencyCols: [6, 7] });
+  return reportSheet('Orders opened in this period', rangeLabel, columns, rows, {
+    currencyCols: [6, 7, 11, 12, 13],
+    note: 'Dates in this sheet refer to the order opening. The adjustment approval timestamp is shown separately.',
+  });
 }
 
 function paymentDetails(payments, rangeLabel) {
@@ -83,23 +106,31 @@ function paymentDetails(payments, rangeLabel) {
 }
 
 function dailyClose(orders, payments, rangeLabel) {
-  const columns = ['Business Day', 'Orders Opened', 'Voided Orders', 'Order Value', 'Cash Collected', 'GCash Collected', 'Other Collected', 'Total Collected', 'Outstanding on Orders Opened'];
+  const columns = [
+    'Business Day', 'Orders Opened', 'Voided Orders', 'Net Order Value', 'Cash Collected',
+    'GCash Collected', 'Other Collected', 'Total Collected', 'Outstanding on Orders Opened',
+    'Value Before Adjustments', 'Discounted Orders', 'Discount Amount', 'Complimentary Orders',
+    'Complimentary Value',
+  ];
   function closeRow(label, report) {
     const methods = Object.fromEntries(report.collections.byMethod.map(({ method, amount }) => [method, amount]));
+    const { discountedCount, discountAmount, complimentaryCount, complimentaryAmount } = report.adjustments;
     return [
       label, report.totalOrders, report.cancelledCount, report.orderValue,
       methods.cash, methods.gcash, methods.other, report.revenue, report.unpaidAmount,
+      report.grossOrderValue, discountedCount, discountAmount, complimentaryCount, complimentaryAmount,
     ];
   }
   const rows = getDailyClose(orders, payments).map((report) => closeRow(report.day, report));
   return reportSheet('Daily Close', rangeLabel, columns, rows, {
-    currencyCols: [3, 4, 5, 6, 7, 8],
+    currencyCols: [3, 4, 5, 6, 7, 8, 9, 11, 13],
+    note: 'Collections use the payment date. Order values, current balances, and current adjustments use the order opening date and exclude voids.',
     total: closeRow('Total', summarizeReport(orders, payments)),
   });
 }
 
 function serviceDetails(orders, rangeLabel) {
-  const columns = ['Service', 'Orders', 'Quantity', 'Order Value', '% of Service Value'];
+  const columns = ['Service', 'Orders', 'Quantity', 'Value Before Adjustments', '% of Service Value'];
   const rows = getServiceStats(orders).map((service) => [
     service.name, service.orders, service.quantity, service.revenue, `${service.pctOfRevenue.toFixed(1)}%`,
   ]);
@@ -119,7 +150,7 @@ function customerDetails(orders, rangeLabel) {
   const rows = [...byName.entries()].map(([name, { orders: count, cents, last }]) => [
     name, count, cents / 100, formatDateTime(last).date,
   ]);
-  return reportSheet('Orders by Customer Name', rangeLabel, ['Customer Name', 'Orders', 'Order Value', 'Last Order'], rows, { currencyCols: [2] });
+  return reportSheet('Orders by Customer Name', rangeLabel, ['Customer Name', 'Orders', 'Net Order Value', 'Last Order'], rows, { currencyCols: [2] });
 }
 
 export function buildReportWorkbook({ reportType, range, data, hasCustomerData = true }) {
@@ -152,7 +183,7 @@ export async function exportToExcel({ reportType, range, data, filters = {}, has
   let { orders, payments } = report;
   if (filters.status || filters.paymentStatus) {
     orders = orders.filter((order) => {
-      const paymentStatus = order.payment_status ? 'paid' : 'unpaid';
+      const paymentStatus = paymentLabel(order).toLowerCase();
       return (!filters.status || order.status === filters.status)
         && (!filters.paymentStatus || paymentStatus === filters.paymentStatus);
     });

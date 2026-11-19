@@ -2,7 +2,7 @@ import { Banknote, CircleCheck } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
 import { STAGES, STAGE_LABEL, peso } from './orderData'
 
-export function PaymentStatus({ paid, emphasis = false }) {
+export function PaymentStatus({ paid, complimentary, emphasis = false }) {
   return (
     <span
       className={`
@@ -14,7 +14,7 @@ export function PaymentStatus({ paid, emphasis = false }) {
       `}
     >
       {paid ? <CircleCheck size={emphasis ? 14 : 12} /> : <Banknote size={emphasis ? 14 : 12} />}
-      {paid ? 'Paid' : 'Unpaid'}
+      {complimentary ? 'Complimentary' : paid ? 'Paid' : 'Unpaid'}
     </span>
   )
 }
@@ -42,6 +42,7 @@ export function OrderStatus({ status }) {
 }
 
 export function MoneyLine({ total, paid, size = 'md' }) {
+  const complimentary = paid && Number(total) === 0
   if (size === 'sm') {
     return (
       <div className="min-w-0">
@@ -49,7 +50,7 @@ export function MoneyLine({ total, paid, size = 'md' }) {
           {peso(total)}
         </p>
         <div className="mt-1">
-          <PaymentStatus paid={paid} />
+          <PaymentStatus paid={paid} complimentary={complimentary} />
         </div>
       </div>
     )
@@ -65,7 +66,7 @@ export function MoneyLine({ total, paid, size = 'md' }) {
       <span className={`${amountClass} text-stone-900 tabular-nums`}>
         {peso(total)}
       </span>
-      <PaymentStatus paid={paid} emphasis />
+      <PaymentStatus paid={paid} complimentary={complimentary} emphasis />
     </div>
   )
 }

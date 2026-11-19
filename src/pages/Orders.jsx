@@ -124,15 +124,26 @@ export default function Orders() {
     const { error, status } = await supabase.rpc('record_order_payment', {
       p_order_id: id,
       p_request_id: request.id,
-      p_method: request.method,
-      p_expected_total: request.amount,
+      p_method: request.quote.method,
+      p_expected_total: request.expectedTotal,
+      p_expected_updated_at: request.expectedUpdatedAt,
+      p_discount_amount: request.quote.complimentary ? null : request.quote.discountAmount,
+      p_adjustment_reason: request.quote.reason,
+      p_complimentary: request.quote.complimentary,
     })
 
     if (error) {
       return { error, status }
     }
 
-    setSelectedOrder(order => order?.id === id ? { ...order, payment_status: true } : order)
+    setSelectedOrder(order => order?.id === id ? {
+      ...order,
+      subtotal: request.quote.subtotal,
+      total: request.quote.total,
+      discount_amount: request.quote.discountAmount,
+      discount_reason: request.quote.reason,
+      payment_status: true,
+    } : order)
     reloadOrders()
     return {}
   }

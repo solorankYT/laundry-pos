@@ -9,7 +9,7 @@ import PaymentSummary from '../components/dashboard/PaymentSummary';
 import TodaysOrders from '../components/dashboard/TodaysOrders';
 
 import { formatRangeLabel, getRangeForPreset } from '../lib/dateRanges';
-import { fetchReportData, fetchReadyOrderCount, getPaymentStats } from '../lib/dashboardData';
+import { fetchReportData, fetchReadyOrderCount, getOrderAdjustmentStats, getPaymentStats } from '../lib/dashboardData';
 
 export default function Dashboard() {
   const [preset, setPreset] = useState('today');
@@ -77,11 +77,12 @@ function DashboardResults({ range, preset, customRange, onRefresh }) {
 
   const { orders, payments } = result.data;
   const collections = getPaymentStats(orders, payments);
+  const adjustments = getOrderAdjustmentStats(orders);
 
   return (
     <div className="space-y-5">
       <div className="grid items-stretch gap-4 lg:grid-cols-[2fr_1fr]">
-        <PaymentSummary stats={collections} />
+        <PaymentSummary stats={collections} adjustments={adjustments} />
         <ReadyForPickup />
       </div>
       <TodaysOrders orders={orders} title="Recent orders" limit={3} />

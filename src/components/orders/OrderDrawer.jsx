@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import { X, Pencil, Ban, Banknote, Printer } from 'lucide-react'
+import CheckoutFields from './CheckoutFields'
 import {
   MoneyLine,
   OrderConfirm,
   StageProgress,
 } from './orderUi'
-import { orderCode, useOrderQuickActions, peso, PAYMENT_METHODS, formatPickup, isRejectedOrderWrite, orderActionError } from './orderData'
+import { checkoutDraft, checkoutQuote, orderCode, useOrderQuickActions, peso, formatPickup, isRejectedOrderWrite, orderActionError } from './orderData'
 
 export default function OrderDrawer({
   order,
@@ -21,9 +22,10 @@ export default function OrderDrawer({
   const [visible, setVisible] = useState(false)
   const [panel, setPanel] = useState(startPayment ? 'payment' : null)
   const [panelError, setPanelError] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('')
-  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(null)
-  const paymentUnconfirmed = pendingPaymentAmount !== null
+  const [checkout, setCheckout] = useState(() => checkoutDraft('full', order))
+  const [pendingPayment, setPendingPayment] = useState(null)
+  const paymentUnconfirmed = pendingPayment !== null
+  const checkoutForm = useId()
   const [voidReason, setVoidReason] = useState('')
   const paymentRequest = useRef(null)
   const requestInFlight = useRef(false)
@@ -47,6 +49,11 @@ export default function OrderDrawer({
   const completed = ['released', 'cancelled'].includes(order.status)
   const canChangeOrder = !completed && !isPaid
   const code = orderCode(order)
+  const subtotal = Number(order.subtotal ?? order.total)
+  const discount = Number(order.discount_amount ?? 0)
+  const complimentary = isPaid && Number(order.total) === 0
+  const canVoid = !completed && (!isPaid || complimentary)
+  const quote = pendingPayment ?? checkoutQuote(checkout, subtotal)
 
   const items = [
     ...(order.order_items ?? []).map(item => ({
@@ -67,35 +74,41 @@ export default function OrderDrawer({
 
   function handleClose() {
     if (requestInFlight.current || updating) return
-    if (paymentUnconfirmed && !window.confirm('Payment may already be recorded. Close and check the order before collecting again?')) return
+    if (paymentUnconfirmed && !window.confirm('Checkout may already be recorded. Close and check the order first?')) return
     onClose()
   }
 
   function showPanel(next) {
     setPanelError('')
+    if (next === 'payment') setCheckout(checkoutDraft('full', order))
     setPanel(next)
   }
 
   async function submitPayment(event) {
     event.preventDefault()
-    if (requestInFlight.current || !paymentMethod) return
+    if (requestInFlight.current || !quote.canSubmit || (!canChangeOrder && !paymentUnconfirmed)) return
 
-    paymentRequest.current ??= { id: crypto.randomUUID(), method: paymentMethod, amount: Number(order.total) }
+    paymentRequest.current ??= {
+      id: crypto.randomUUID(),
+      quote,
+      expectedTotal: Number(order.total),
+      expectedUpdatedAt: order.updated_at,
+    }
     requestInFlight.current = true
     setUpdating(true)
     setPanelError('')
     try {
       const { error, status } = await onMarkPaid(order.id, paymentRequest.current)
       if (!error) {
-        setPendingPaymentAmount(null)
+        setPendingPayment(null)
         showPanel(null)
       } else if (isRejectedOrderWrite(error, status)) {
         paymentRequest.current = null
-        setPendingPaymentAmount(null)
+        setPendingPayment(null)
         setPanelError(orderActionError(error, 'Payment was rejected. Check the order before trying again.'))
       } else {
-        setPendingPaymentAmount(paymentRequest.current.amount)
-        setPanelError('Payment could not be confirmed. Retry this payment before collecting again.')
+        setPendingPayment(paymentRequest.current.quote)
+        setPanelError('Checkout could not be confirmed. Retry this checkout to verify its result.')
       }
     } finally {
       requestInFlight.current = false
@@ -135,7 +148,9 @@ export default function OrderDrawer({
       order.customer_name,
       ...(order.pickup_at ? [`Pickup: ${formatPickup(order.pickup_at)}`] : []),
       ...items.map(item => `${item.name} ×${item.qty} · ${peso(item.subtotal)}`),
-      `Order total: ${peso(order.total)}`,
+      ...(discount ? [`Original total: ${peso(subtotal)}`, `Discount: −${peso(discount)}`] : []),
+      `Final total: ${peso(order.total)}`,
+      ...(complimentary ? ['Complimentary'] : []),
       `Balance due: ${peso(isPaid ? 0 : order.total)}`,
     ]
     for (const [index, line] of lines.entries()) {
@@ -237,6 +252,13 @@ export default function OrderDrawer({
 
           <div className={`mt-4 rounded-xl border px-4 py-3 ${snapshotTone}`}>
             <MoneyLine total={order.total} paid={isPaid} size="lg" />
+            {discount > 0 && (
+              <dl className="mt-2 space-y-1 text-xs text-stone-700">
+                <div className="flex justify-between gap-2"><dt>Original total</dt><dd>{peso(subtotal)}</dd></div>
+                <div className="flex justify-between gap-2"><dt>Discount</dt><dd>−{peso(discount)}</dd></div>
+                {order.discount_reason && <div><dt className="inline">Reason </dt><dd className="inline">{order.discount_reason}</dd></div>}
+              </dl>
+            )}
             <div className="mt-2.5">
               <StageProgress status={order.status} />
             </div>
@@ -245,45 +267,58 @@ export default function OrderDrawer({
 
         <div className="h-px bg-stone-100" />
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div>
-            <p className="text-xs font-semibold text-stone-500 mb-2">
-              {items.length} {items.length === 1 ? 'item' : 'items'}
-            </p>
-
-            <div className="rounded-xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
-              {items.length > 0 ? (
-                items.map(item => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-center px-3.5 py-3"
-                  >
-                    <div className="min-w-0 pr-4">
-                      <p className="text-sm text-stone-800 truncate">{item.name}</p>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        ×{item.qty} @ {peso(item.unit)}
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold text-stone-900 shrink-0 tabular-nums">
-                      {peso(item.subtotal)}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-stone-500 px-3.5 py-3">
-                  No items on this order
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {panel === 'payment' ? (
+            <form id={checkoutForm} onSubmit={submitPayment}>
+              <CheckoutFields
+                draft={checkout}
+                quote={quote}
+                onChange={setCheckout}
+                disabled={updating || paymentUnconfirmed || !canChangeOrder}
+              />
+            </form>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs font-semibold text-stone-500 mb-2">
+                  {items.length} {items.length === 1 ? 'item' : 'items'}
                 </p>
-              )}
-            </div>
-          </div>
 
-          {order.customer_phone && <p className="text-sm text-stone-700">Phone: {order.customer_phone}</p>}
-          {order.pickup_at && <p className="text-sm text-stone-700">Pickup: {formatPickup(order.pickup_at)}</p>}
-          {order.notes && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
-              <p className="text-xs font-semibold text-amber-800 mb-1">Note</p>
-              <p className="text-sm text-amber-950 leading-snug">{order.notes}</p>
-            </div>
+                <div className="rounded-xl border border-stone-200 divide-y divide-stone-100 overflow-hidden">
+                  {items.length > 0 ? (
+                    items.map(item => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between items-center px-3.5 py-3"
+                      >
+                        <div className="min-w-0 pr-4">
+                          <p className="text-sm text-stone-800 truncate">{item.name}</p>
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            ×{item.qty} @ {peso(item.unit)}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-stone-900 shrink-0 tabular-nums">
+                          {peso(item.subtotal)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-stone-500 px-3.5 py-3">
+                      No items on this order
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {order.customer_phone && <p className="text-sm text-stone-700">Phone: {order.customer_phone}</p>}
+              {order.pickup_at && <p className="text-sm text-stone-700">Pickup: {formatPickup(order.pickup_at)}</p>}
+              {order.notes && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">Note</p>
+                  <p className="text-sm text-amber-950 leading-snug">{order.notes}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -292,28 +327,17 @@ export default function OrderDrawer({
             <p role="alert" className="mb-2 rounded-lg bg-rose-50 p-2 text-sm text-rose-700">{panelError || actionError}</p>
           )}
           {panel === 'payment' && (
-            <form className="space-y-2" onSubmit={submitPayment}>
-              <label className="block text-sm font-semibold text-stone-800">
-                Record payment of {peso(paymentUnconfirmed ? pendingPaymentAmount : order.total)}
-                <select
-                  className="mt-1 block h-11 w-full rounded-lg border border-stone-300 px-3"
-                  disabled={updating || paymentUnconfirmed}
-                  required
-                  value={paymentMethod}
-                  onChange={event => setPaymentMethod(event.target.value)}
-                >
-                  <option value="">Choose a payment method</option>
-                  {PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}
-                </select>
-              </label>
+            <>
+              {!canChangeOrder && !paymentUnconfirmed && <p role="status" className="mb-2 text-sm text-stone-600">This order is already settled or closed.</p>}
               <PanelActions
-                label={paymentUnconfirmed ? 'Retry payment' : 'Record payment'}
+                label={paymentUnconfirmed ? 'Retry checkout' : quote.complimentary ? 'Confirm complimentary' : 'Record payment'}
                 updating={updating}
-                submitDisabled={!paymentMethod}
+                submitDisabled={!quote.canSubmit || (!canChangeOrder && !paymentUnconfirmed)}
                 cancelDisabled={paymentUnconfirmed}
                 onCancel={() => showPanel(null)}
+                form={checkoutForm}
               />
-            </form>
+            </>
           )}
           {panel === 'void' && (
             <form className="space-y-2" onSubmit={submitVoid}>
@@ -376,7 +400,7 @@ export default function OrderDrawer({
                     Edit order
                   </button>
                 )}
-                {canChangeOrder && onVoid && (
+                {canVoid && onVoid && (
                   <button type="button" onClick={() => showPanel('void')} disabled={updating} className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-rose-50 px-2 text-sm font-semibold text-rose-700 disabled:opacity-50">
                     <Ban size={15} />
                     Void
@@ -394,11 +418,11 @@ export default function OrderDrawer({
 }
 
 
-function PanelActions({ label, updating, submitDisabled, cancelDisabled, onCancel }) {
+function PanelActions({ label, updating, submitDisabled, cancelDisabled, onCancel, form }) {
   return (
     <div className="flex gap-2">
       <button type="button" onClick={onCancel} disabled={updating || cancelDisabled} className="min-h-11 flex-1 rounded-xl border px-3 text-sm font-semibold disabled:opacity-50">Cancel</button>
-      <button type="submit" disabled={updating || submitDisabled} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white disabled:opacity-50">
+      <button type="submit" form={form} disabled={updating || submitDisabled} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white disabled:opacity-50">
         {updating ? 'Saving…' : label}
       </button>
     </div>

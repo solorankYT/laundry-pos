@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 import { businessDateKey, formatPeso } from './dateRanges.js';
 
-const ORDER_COLUMNS = 'id, order_number, customer_name, created_at, created_by_email, total, payment_status, status, order_items(service_name, quantity, price), order_addons(addon_name, quantity, total)';
+const ORDER_COLUMNS = 'id, order_number, customer_name, created_at, created_by_email, subtotal, discount_amount, discount_reason, discount_at, total, payment_status, status, order_items(service_name, quantity, price), order_addons(addon_name, quantity, total)';
 const PAYMENT_COLUMNS = 'id, order_id, amount, method, recorded_at, recorded_by_email, orders(order_number, customer_name)';
 const PAGE_SIZE = 500;
 
@@ -62,8 +62,35 @@ const isActive = (order) => order.status !== 'cancelled';
 export const PAYMENT_METHOD_LABELS = { cash: 'Cash', gcash: 'GCash', other: 'Other' };
 export const ORDER_STATUS_LABELS = { pending: 'Pending', done: 'Ready', released: 'Released', cancelled: 'Voided' };
 
+export function getOrderSubtotal(order) {
+  return order.subtotal == null
+    ? (toCents(order.total) + toCents(order.discount_amount)) / 100
+    : Number(order.subtotal);
+}
+
+export function isComplimentary(order) {
+  return toCents(order.discount_amount) > 0 && toCents(order.total) === 0;
+}
+
+export function hasOutstandingBalance(order) {
+  return isActive(order) && !order.payment_status && toCents(order.total) > 0;
+}
+
+export function getOrderAdjustmentStats(orders) {
+  const adjusted = orders.filter((order) => isActive(order) && toCents(order.discount_amount) > 0);
+  const discounted = adjusted.filter((order) => !isComplimentary(order));
+  const complimentary = adjusted.filter(isComplimentary);
+
+  return {
+    discountedCount: discounted.length,
+    discountAmount: sumAmounts(discounted, (order) => order.discount_amount),
+    complimentaryCount: complimentary.length,
+    complimentaryAmount: sumAmounts(complimentary, (order) => order.discount_amount),
+  };
+}
+
 export function getPaymentStats(orders, payments = []) {
-  const unpaid = orders.filter((order) => isActive(order) && !order.payment_status);
+  const unpaid = orders.filter(hasOutstandingBalance);
   return {
     paidAmount: sumAmounts(payments, (payment) => payment.amount),
     unpaidAmount: sumAmounts(unpaid, (order) => order.total),
@@ -83,6 +110,7 @@ export function summarizeReport(orders, payments) {
 
   return {
     totalOrders: orders.length,
+    grossOrderValue: sumAmounts(active, getOrderSubtotal),
     orderValue,
     revenue: collections.paidAmount,
     unpaidAmount: collections.unpaidAmount,
@@ -95,6 +123,7 @@ export function summarizeReport(orders, payments) {
     cancelledCount: statusCounts.cancelled ?? 0,
     avgOrderValue: active.length ? orderValue / active.length : 0,
     collections,
+    adjustments: getOrderAdjustmentStats(orders),
   };
 }
 

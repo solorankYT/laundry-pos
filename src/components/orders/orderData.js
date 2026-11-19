@@ -9,8 +9,44 @@ export const ORDER_SELECT = `
 export const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'gcash', label: 'GCash' },
-  { value: 'other', label: 'Other' },
 ]
+
+export function checkoutDraft(mode = 'full', order, method = '') {
+  const existingDiscount = Number(order?.discount_amount ?? 0)
+  return {
+    mode: existingDiscount > 0 ? 'discount' : mode,
+    amount: existingDiscount > 0 ? String(existingDiscount) : '',
+    reason: order?.discount_reason ?? '',
+    method,
+  }
+}
+
+export function checkoutQuote(draft, subtotal) {
+  const subtotalCents = Math.round(Number(subtotal) * 100)
+  const requestedCents = /^\d+(\.\d{1,2})?$/.test(draft.amount)
+    ? Math.round(Number(draft.amount) * 100)
+    : 0
+  const discount = draft.mode === 'discount'
+  const complimentary = draft.mode === 'complimentary'
+  const later = draft.method === 'later'
+  const validDiscount = !discount || (requestedCents > 0 && requestedCents < subtotalCents)
+  const discountCents = complimentary ? subtotalCents : discount && validDiscount ? requestedCents : 0
+  const reason = discount || complimentary ? draft.reason.trim() : null
+  const method = complimentary || later ? null : draft.method
+
+  return {
+    subtotal: subtotalCents / 100,
+    discountAmount: discountCents / 100,
+    total: (subtotalCents - discountCents) / 100,
+    validDiscount,
+    reason,
+    method,
+    complimentary,
+    canSubmit: subtotalCents > 0 && validDiscount
+      && (!(discount || complimentary) || Boolean(reason))
+      && (later || complimentary || PAYMENT_METHODS.some(payment => payment.value === method)),
+  }
+}
 
 export function searchPattern(value) {
   const term = value.replace(/^#\s*/, '')
