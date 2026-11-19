@@ -1,10 +1,36 @@
-import { FiHome, FiList, FiDollarSign, FiLogOut } from 'react-icons/fi'
+import { createElement, useState, useSyncExternalStore } from 'react'
+import { FiHome, FiList, FiUsers, FiLogOut } from 'react-icons/fi'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import MobileNav from './MobileNav'
 
+function subscribeToConnection(onChange) {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
+  }
+}
+
+const isOnline = () => navigator.onLine
+
 export default function AppLayout() {
+  const online = useSyncExternalStore(subscribeToConnection, isOnline)
   const { user, role, signOut } = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    setSignOutError('')
+    try {
+      await signOut()
+    } catch {
+      setSignOutError('Could not sign out. Check your connection and try again.')
+      setSigningOut(false)
+    }
+  }
 
   const navItems = [
     {
@@ -19,9 +45,10 @@ export default function AppLayout() {
       icon: FiList,
     },
     {
-      label: 'Payments',
-      path: '/payments',
-      icon: FiDollarSign,
+      label: 'Staff',
+      path: '/users',
+      icon: FiUsers,
+      admin: true,
     },
   ]
 
@@ -41,12 +68,12 @@ export default function AppLayout() {
           </span>
 
           <span className="hidden lg:block truncate text-[15px] font-semibold text-stone-900">
-            Laundry POS
+            {import.meta.env.VITE_SHOP_NAME?.trim() || 'Laundry POS'}
           </span>
         </div>
 
         <nav className="flex flex-col gap-1" aria-label="Main">
-          {visibleNavItems.map(({ label, path, icon: Icon }) => (
+          {visibleNavItems.map(({ label, path, icon }) => (
             <NavLink
               key={path}
               to={path}
@@ -60,7 +87,7 @@ export default function AppLayout() {
                 }`
               }
             >
-              <Icon size={18} className="shrink-0" />
+              {createElement(icon, { size: 18, className: 'shrink-0', 'aria-hidden': true })}
 
               <span className="hidden lg:inline">
                 {label}
@@ -76,7 +103,8 @@ export default function AppLayout() {
 
           <button
             type="button"
-            onClick={signOut}
+            onClick={handleSignOut}
+            disabled={signingOut}
             title="Logout"
             aria-label="Logout"
             className="flex h-11 w-full items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-stone-500 transition-colors hover:bg-rose-50 hover:text-rose-600 md:justify-center lg:justify-start"
@@ -92,17 +120,20 @@ export default function AppLayout() {
 
       {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-
-   
-
+        {!online && (
+          <p className="shrink-0 bg-amber-100 px-4 py-2 text-sm text-amber-900" role="status">
+            You’re offline. Use the paper log until the connection returns.
+          </p>
+        )}
         {/* PAGE CONTENT */}
         <main className="flex-1 overflow-y-auto flex flex-col">
+          {signOutError && <p className="bg-rose-50 px-4 py-2 text-sm text-rose-800" role="alert">{signOutError}</p>}
           <div className="flex-1">
             <Outlet />
           </div>
 
           {/* MOBILE NAV */}
-          <MobileNav />
+          <MobileNav items={visibleNavItems} onSignOut={handleSignOut} signingOut={signingOut} />
         </main>
       </div>
     </div>

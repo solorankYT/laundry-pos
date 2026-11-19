@@ -23,12 +23,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [{
-          urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-          handler: 'NetworkFirst',
-          options: { cacheName: 'supabase-cache' }
-        }]
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       }
     })
   ]

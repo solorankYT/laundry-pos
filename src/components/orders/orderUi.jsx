@@ -1,49 +1,6 @@
-import { useState } from 'react'
 import { Banknote, CircleCheck } from 'lucide-react'
 import ConfirmModal from '../ui/ConfirmModal'
-
-export const STAGES = ['pending', 'done', 'released']
-
-export const STAGE_LABEL = {
-  pending: 'Pending',
-  done: 'Done',
-  released: 'Released',
-}
-
-export const NEXT_ACTION = {
-  pending: { next: 'done', label: 'Mark as done' },
-  done: { next: 'released', label: 'Release order' },
-  released: null,
-}
-
-export const ORDER_ROW_GRID =
-  'grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(148px,0.9fr)_112px_minmax(220px,auto)]'
-
-export function peso(n) {
-  return `₱${Number(n).toFixed(2)}`
-}
-
-export function orderCode(order) {
-  if (order.order_number) return order.order_number
-  if (order.id) return order.id.toString().slice(-4).toUpperCase()
-  return null
-}
-
-export function formatServices(items) {
-  if (!items || items.length === 0) return '—'
-
-  return items
-    .map(item =>
-      item.quantity > 1
-        ? `${item.service_name} ×${item.quantity}`
-        : item.service_name
-    )
-    .join(' · ')
-}
-
-export function isOrderPaid(order) {
-  return !!order.payment_status
-}
+import { STAGES, STAGE_LABEL, peso } from './orderData'
 
 export function PaymentStatus({ paid, emphasis = false }) {
   return (
@@ -67,6 +24,7 @@ export function OrderStatus({ status }) {
     pending: 'bg-amber-50 text-amber-800',
     done: 'bg-sky-50 text-sky-800',
     released: 'bg-emerald-50 text-emerald-800',
+    cancelled: 'bg-stone-100 text-stone-600',
   }
 
   return (
@@ -113,6 +71,8 @@ export function MoneyLine({ total, paid, size = 'md' }) {
 }
 
 export function StageProgress({ status }) {
+  if (status === 'cancelled') return <OrderStatus status={status} />
+
   const stageIndex = STAGES.indexOf(status)
 
   return (
@@ -155,81 +115,4 @@ export function OrderConfirm({ confirm, onCancel }) {
       onCancel={onCancel}
     />
   )
-}
-
-export function useOrderQuickActions({ order, onUpdateStatus, onMarkPaid }) {
-  const [updating, setUpdating] = useState(false)
-  const [confirm, setConfirm] = useState(null)
-
-  const isPaid = isOrderPaid(order)
-  const advance = NEXT_ACTION[order.status]
-  const releaseBlocked = advance?.next === 'released' && !isPaid
-
-  const runAdvance = async () => {
-    setConfirm(null)
-    if (!advance || updating || releaseBlocked) return
-
-    setUpdating(true)
-    try {
-      await onUpdateStatus(order.id, advance.next)
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const runPay = async () => {
-    setConfirm(null)
-    if (updating) return
-
-    setUpdating(true)
-    try {
-      await onMarkPaid(order.id)
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const askAdvance = e => {
-    e?.stopPropagation?.()
-    if (!advance || updating || releaseBlocked) return
-
-    setConfirm({
-      message:
-        advance.next === 'released'
-          ? 'Release this order to the customer?'
-          : 'Mark this order as done?',
-      action: runAdvance,
-    })
-  }
-
-  const askPay = e => {
-    e?.stopPropagation?.()
-    if (updating) return
-
-    setConfirm({
-      message: 'Mark this order as paid?',
-      action: runPay,
-    })
-  }
-
-  return {
-    updating,
-    setUpdating,
-    confirm,
-    setConfirm,
-    isPaid,
-    advance,
-    releaseBlocked,
-    askAdvance,
-    askPay,
-  }
-}
-
-export function activateOnEnter(handler) {
-  return e => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      handler(e)
-    }
-  }
 }

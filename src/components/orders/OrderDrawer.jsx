@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { X, Pencil, Trash2, Banknote } from 'lucide-react'
+import { X, Pencil, Ban, Banknote, Printer } from 'lucide-react'
 import {
   MoneyLine,
   OrderConfirm,
   StageProgress,
-  peso,
-  orderCode,
-  useOrderQuickActions,
 } from './orderUi'
+import { orderCode, useOrderQuickActions, peso, PAYMENT_METHODS, formatPickup, isRejectedOrderWrite, orderActionError } from './orderData'
 
 export default function OrderDrawer({
   order,
@@ -16,10 +14,19 @@ export default function OrderDrawer({
   onUpdateStatus,
   onMarkPaid,
   onEdit,
-  onDelete,
+  onVoid,
+  startPayment,
+  actionError,
 }) {
   const [visible, setVisible] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [panel, setPanel] = useState(startPayment ? 'payment' : null)
+  const [panelError, setPanelError] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('')
+  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(null)
+  const paymentUnconfirmed = pendingPaymentAmount !== null
+  const [voidReason, setVoidReason] = useState('')
+  const paymentRequest = useRef(null)
+  const requestInFlight = useRef(false)
 
   const {
     updating,
@@ -30,19 +37,15 @@ export default function OrderDrawer({
     advance,
     releaseBlocked,
     askAdvance,
-    askPay,
-  } = useOrderQuickActions({ order, onUpdateStatus, onMarkPaid })
+  } = useOrderQuickActions({ order, onUpdateStatus })
 
   useEffect(() => {
-    if (order) {
-      requestAnimationFrame(() => setVisible(true))
-    } else {
-      setVisible(false)
-    }
-  }, [order])
+    const frame = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
-  if (!order) return null
-
+  const completed = ['released', 'cancelled'].includes(order.status)
+  const canChangeOrder = !completed && !isPaid
   const code = orderCode(order)
 
   const items = [
@@ -55,39 +58,95 @@ export default function OrderDrawer({
     })),
     ...(order.order_addons ?? []).map(addon => ({
       id: `addon-${addon.id}`,
-      name: addon.addons?.name ?? 'Add-on',
+      name: addon.addon_name ?? addon.addons?.name ?? 'Add-on',
       qty: addon.quantity,
       unit: Number(addon.unit_price),
       subtotal: Number(addon.total),
     })),
   ]
 
-  const handleClose = () => {
-    setVisible(false)
-    setTimeout(onClose, 220)
+  function handleClose() {
+    if (requestInFlight.current || updating) return
+    if (paymentUnconfirmed && !window.confirm('Payment may already be recorded. Close and check the order before collecting again?')) return
+    onClose()
   }
 
-  const handleEdit = () => {
-    if (updating) return
-    onEdit?.(order)
+  function showPanel(next) {
+    setPanelError('')
+    setPanel(next)
   }
 
-  const handleDelete = () => {
-    if (updating) return
+  async function submitPayment(event) {
+    event.preventDefault()
+    if (requestInFlight.current || !paymentMethod) return
 
-    setDeleteConfirm({
-      message:
-        'Delete this order permanently? This will also remove its services and add-ons.',
-      action: async () => {
-        setDeleteConfirm(null)
-        setUpdating(true)
-        try {
-          await onDelete?.(order.id)
-        } finally {
-          setUpdating(false)
-        }
-      },
-    })
+    paymentRequest.current ??= { id: crypto.randomUUID(), method: paymentMethod, amount: Number(order.total) }
+    requestInFlight.current = true
+    setUpdating(true)
+    setPanelError('')
+    try {
+      const { error, status } = await onMarkPaid(order.id, paymentRequest.current)
+      if (!error) {
+        setPendingPaymentAmount(null)
+        showPanel(null)
+      } else if (isRejectedOrderWrite(error, status)) {
+        paymentRequest.current = null
+        setPendingPaymentAmount(null)
+        setPanelError(orderActionError(error, 'Payment was rejected. Check the order before trying again.'))
+      } else {
+        setPendingPaymentAmount(paymentRequest.current.amount)
+        setPanelError('Payment could not be confirmed. Retry this payment before collecting again.')
+      }
+    } finally {
+      requestInFlight.current = false
+      setUpdating(false)
+    }
+  }
+
+  async function submitVoid(event) {
+    event.preventDefault()
+    if (requestInFlight.current || !voidReason.trim()) return
+
+    requestInFlight.current = true
+    setUpdating(true)
+    setPanelError('')
+    try {
+      const error = await onVoid(order.id, voidReason.trim())
+      if (error) setPanelError(error)
+    } finally {
+      requestInFlight.current = false
+      setUpdating(false)
+    }
+  }
+
+  function printClaimStub() {
+    const popup = window.open('', '_blank', 'popup,width=420,height=580')
+    if (!popup) {
+      setPanelError('The browser blocked printing. Allow pop-ups and try again.')
+      return
+    }
+
+    popup.opener = null
+    const { document } = popup
+    document.title = `Claim stub #${code}`
+    const lines = [
+      import.meta.env.VITE_SHOP_NAME?.trim() || 'Laundry POS',
+      `Pickup claim #${code}`,
+      order.customer_name,
+      ...(order.pickup_at ? [`Pickup: ${formatPickup(order.pickup_at)}`] : []),
+      ...items.map(item => `${item.name} ×${item.qty} · ${peso(item.subtotal)}`),
+      `Order total: ${peso(order.total)}`,
+      `Balance due: ${peso(isPaid ? 0 : order.total)}`,
+    ]
+    for (const [index, line] of lines.entries()) {
+      const element = document.createElement(index === 0 ? 'h1' : 'p')
+      element.textContent = line
+      document.body.append(element)
+    }
+    document.body.style.fontFamily = 'system-ui, sans-serif'
+    document.body.style.maxWidth = '420px'
+    popup.focus()
+    popup.print()
   }
 
   const snapshotTone = isPaid
@@ -218,6 +277,8 @@ export default function OrderDrawer({
             </div>
           </div>
 
+          {order.customer_phone && <p className="text-sm text-stone-700">Phone: {order.customer_phone}</p>}
+          {order.pickup_at && <p className="text-sm text-stone-700">Pickup: {formatPickup(order.pickup_at)}</p>}
           {order.notes && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
               <p className="text-xs font-semibold text-amber-800 mb-1">Note</p>
@@ -226,25 +287,67 @@ export default function OrderDrawer({
           )}
         </div>
 
-        <div className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 border-t border-stone-100 bg-white space-y-2">
-          {order.status !== 'released' && (
-            <>
-              {!isPaid && (
+        <div className="border-t border-stone-100 bg-white px-5 py-3">
+          {(panelError || actionError) && (
+            <p role="alert" className="mb-2 rounded-lg bg-rose-50 p-2 text-sm text-rose-700">{panelError || actionError}</p>
+          )}
+          {panel === 'payment' && (
+            <form className="space-y-2" onSubmit={submitPayment}>
+              <label className="block text-sm font-semibold text-stone-800">
+                Record payment of {peso(paymentUnconfirmed ? pendingPaymentAmount : order.total)}
+                <select
+                  className="mt-1 block h-11 w-full rounded-lg border border-stone-300 px-3"
+                  disabled={updating || paymentUnconfirmed}
+                  required
+                  value={paymentMethod}
+                  onChange={event => setPaymentMethod(event.target.value)}
+                >
+                  <option value="">Choose a payment method</option>
+                  {PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}
+                </select>
+              </label>
+              <PanelActions
+                label={paymentUnconfirmed ? 'Retry payment' : 'Record payment'}
+                updating={updating}
+                submitDisabled={!paymentMethod}
+                cancelDisabled={paymentUnconfirmed}
+                onCancel={() => showPanel(null)}
+              />
+            </form>
+          )}
+          {panel === 'void' && (
+            <form className="space-y-2" onSubmit={submitVoid}>
+              <label className="block text-sm font-semibold text-stone-800">
+                Reason for voiding
+                <textarea
+                  className="mt-1 block w-full rounded-lg border border-stone-300 p-3"
+                  disabled={updating}
+                  required
+                  maxLength={500}
+                  rows={2}
+                  value={voidReason}
+                  onChange={event => setVoidReason(event.target.value)}
+                />
+              </label>
+              <PanelActions
+                label="Confirm void"
+                updating={updating}
+                submitDisabled={!voidReason.trim()}
+                onCancel={() => showPanel(null)}
+              />
+            </form>
+          )}
+          {!panel && (
+            <div className="space-y-2">
+              {canChangeOrder && (
                 <button
                   type="button"
-                  onClick={askPay}
+                  onClick={() => showPanel('payment')}
                   disabled={updating}
-                  className="
-                    w-full min-h-12 rounded-xl
-                    font-semibold text-sm
-                    flex items-center justify-center gap-2
-                    bg-rose-50 text-rose-700
-                    hover:bg-rose-100
-                    disabled:opacity-50
-                  "
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 text-sm font-semibold text-rose-700 disabled:opacity-50"
                 >
                   <Banknote size={17} />
-                  {updating ? 'Saving…' : 'Mark as paid'}
+                  Take payment
                 </button>
               )}
 
@@ -253,83 +356,51 @@ export default function OrderDrawer({
                   type="button"
                   onClick={askAdvance}
                   disabled={updating || releaseBlocked}
-                  className={`
-                    w-full min-h-12 rounded-xl
-                    font-semibold text-sm
-                    flex items-center justify-center
-                    disabled:opacity-50
-
-                    ${
-                      releaseBlocked
-                        ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                        : 'bg-teal-600 text-white hover:bg-teal-700'
-                    }
-                  `}
+                  className="min-h-11 w-full rounded-xl bg-teal-600 px-3 text-sm font-semibold text-white disabled:bg-stone-100 disabled:text-stone-400"
                 >
                   {updating ? 'Saving…' : advance.label}
                 </button>
               )}
+              {releaseBlocked && <p className="text-center text-xs text-stone-600">Take payment before releasing.</p>}
 
-              {releaseBlocked && (
-                <p className="text-center text-xs text-stone-500">
-                  Mark as paid before releasing
-                </p>
-              )}
-            </>
-          )}
-
-          {order.status === 'released' && (
-            <p className="text-center text-sm font-medium text-stone-500 py-2">
-              This order has been released
-            </p>
-          )}
-
-          {(onEdit || onDelete) && (
-            <div className="flex gap-2 pt-1">
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={handleEdit}
-                  disabled={updating}
-                  className="
-                    flex-1 min-h-11 rounded-xl
-                    text-sm font-semibold
-                    text-stone-700 bg-stone-100
-                    hover:bg-stone-200
-                    disabled:opacity-40
-                    flex items-center justify-center gap-1.5
-                  "
-                >
-                  <Pencil size={15} />
-                  Edit order
-                </button>
-              )}
-
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={updating}
-                  className="
-                    flex-1 min-h-11 rounded-xl
-                    text-sm font-semibold
-                    text-rose-700 bg-rose-50
-                    hover:bg-rose-100
-                    disabled:opacity-40
-                    flex items-center justify-center gap-1.5
-                  "
-                >
-                  <Trash2 size={15} />
-                  Delete
-                </button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {order.status !== 'cancelled' && (
+                  <button type="button" onClick={printClaimStub} className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-stone-100 px-2 text-sm font-semibold text-stone-700">
+                    <Printer size={15} />
+                    Print claim stub
+                  </button>
+                )}
+                {canChangeOrder && onEdit && (
+                  <button type="button" onClick={() => onEdit(order)} disabled={updating} className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-stone-100 px-2 text-sm font-semibold text-stone-700 disabled:opacity-50">
+                    <Pencil size={15} />
+                    Edit order
+                  </button>
+                )}
+                {canChangeOrder && onVoid && (
+                  <button type="button" onClick={() => showPanel('void')} disabled={updating} className="flex min-h-11 flex-1 items-center justify-center gap-1 rounded-xl bg-rose-50 px-2 text-sm font-semibold text-rose-700 disabled:opacity-50">
+                    <Ban size={15} />
+                    Void
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
       <OrderConfirm confirm={confirm} onCancel={() => setConfirm(null)} />
-      <OrderConfirm confirm={deleteConfirm} onCancel={() => setDeleteConfirm(null)} />
+    </div>
+  )
+}
+
+
+function PanelActions({ label, updating, submitDisabled, cancelDisabled, onCancel }) {
+  return (
+    <div className="flex gap-2">
+      <button type="button" onClick={onCancel} disabled={updating || cancelDisabled} className="min-h-11 flex-1 rounded-xl border px-3 text-sm font-semibold disabled:opacity-50">Cancel</button>
+      <button type="submit" disabled={updating || submitDisabled} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white disabled:opacity-50">
+        {updating ? 'Saving…' : label}
+      </button>
     </div>
   )
 }

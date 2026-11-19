@@ -2,10 +2,9 @@ import { getOrdersByStatus } from '../../lib/dashboardData';
 
 const STATUS_META = {
   pending: { label: 'Pending', color: 'bg-orange-400' },
-  processing: { label: 'Processing', color: 'bg-blue-400' },
-  ready: { label: 'Ready', color: 'bg-green-500' },
+  done: { label: 'Ready', color: 'bg-green-500' },
   released: { label: 'Released', color: 'bg-gray-400' },
-  cancelled: { label: 'Cancelled', color: 'bg-red-400' },
+  cancelled: { label: 'Voided', color: 'bg-red-400' },
 };
 
 export default function OrdersOverview({ orders, onSelectStatus }) {

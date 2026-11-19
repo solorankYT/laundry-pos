@@ -5,18 +5,15 @@ import {
   MoneyLine,
   OrderConfirm,
   OrderStatus,
-  activateOnEnter,
-  formatServices,
-  orderCode,
-  useOrderQuickActions,
 } from './orderUi'
+import { activateOnEnter, formatServices, orderCode, useOrderQuickActions } from './orderData'
 
 dayjs.extend(relativeTime)
 
 export default function OrderCard({
   order,
   onUpdateStatus,
-  onMarkPaid,
+  onOpenPayment,
   onClick,
   isActive,
 }) {
@@ -28,8 +25,7 @@ export default function OrderCard({
     advance,
     releaseBlocked,
     askAdvance,
-    askPay,
-  } = useOrderQuickActions({ order, onUpdateStatus, onMarkPaid })
+  } = useOrderQuickActions({ order, onUpdateStatus })
 
   const code = orderCode(order)
 
@@ -91,10 +87,10 @@ export default function OrderCard({
           onClick={e => e.stopPropagation()}
           onKeyDown={e => e.stopPropagation()}
         >
-          {order.status === 'released' ? (
+          {['released', 'cancelled'].includes(order.status) ? (
             <div className="rounded-lg bg-slate-50 py-2.5 text-center">
               <p className="text-xs font-medium text-slate-400">
-                Order released
+                {order.status === 'released' ? 'Order released' : 'Order voided'}
               </p>
             </div>
           ) : (
@@ -104,7 +100,7 @@ export default function OrderCard({
                 {!isPaid && (
                   <button
                     type="button"
-                    onClick={askPay}
+                    onClick={onOpenPayment}
                     disabled={updating}
                     className="
                       flex-1
@@ -124,7 +120,7 @@ export default function OrderCard({
                   >
                     <Banknote size={16} />
 
-                    {updating ? 'Saving…' : 'Mark as paid'}
+                    {updating ? 'Saving…' : 'Take payment'}
                   </button>
                 )}
 
@@ -173,7 +169,7 @@ export default function OrderCard({
               {/* PAYMENT REQUIREMENT */}
               {releaseBlocked && (
                 <p className="text-center text-xs text-slate-500 mt-2">
-                  Mark as paid before releasing
+                  Take payment before releasing
                 </p>
               )}
             </>

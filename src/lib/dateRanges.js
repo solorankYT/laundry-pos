@@ -1,44 +1,11 @@
-// src/lib/dateRanges.js
-//
-// Single source of truth for "what period is selected". Both the dashboard
-// and the Excel export call getRangeForPreset() so the numbers they show
-// always describe the same window of time.
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
-function startOfWeek(d) {
-  // Week starts on Monday.
-  const x = startOfDay(d);
-  const day = x.getDay(); // 0 = Sunday
-  const diff = (day === 0 ? -6 : 1) - day;
-  x.setDate(x.getDate() + diff);
-  return x;
-}
-
-function endOfWeek(d) {
-  const s = startOfWeek(d);
-  const e = new Date(s);
-  e.setDate(e.getDate() + 6);
-  return endOfDay(e);
-}
-
-function startOfMonth(d) {
-  return startOfDay(new Date(d.getFullYear(), d.getMonth(), 1));
-}
-
-function endOfMonth(d) {
-  return endOfDay(new Date(d.getFullYear(), d.getMonth() + 1, 0));
-}
+export const BUSINESS_TIME_ZONE = 'Asia/Manila';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const manilaDay = new Intl.DateTimeFormat('en-CA', {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 export const PRESETS = [
   { key: 'today', label: 'Today' },
@@ -50,116 +17,110 @@ export const PRESETS = [
   { key: 'custom', label: 'Custom Range' },
 ];
 
-// Returns { start: Date, end: Date, comparisonStart, comparisonEnd }
-// comparison* is the equivalent prior period, used for "+8% vs last week" copy.
-export function getRangeForPreset(preset, custom = {}) {
-  const now = new Date();
+export function businessDateKey(date) {
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  return manilaDay.format(new Date(date));
+}
 
+function calendarDay(key) {
+  return new Date(`${key}T00:00:00Z`);
+}
+
+function addDays(key, days) {
+  return new Date(calendarDay(key).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function monthStart(key, offset) {
+  const date = calendarDay(key);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1))
+    .toISOString().slice(0, 10);
+}
+
+function midnight(key) {
+  return new Date(`${key}T00:00:00+08:00`);
+}
+
+function range(start, end, comparisonStart, comparisonEnd) {
+  return {
+    start: midnight(start),
+    end: midnight(end),
+    comparisonStart: midnight(comparisonStart),
+    comparisonEnd: midnight(comparisonEnd),
+  };
+}
+
+export function isValidCustomRange(custom) {
+  return [custom?.start, custom?.end].every((day) => (
+    typeof day === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(day)
+      && Number.isFinite(calendarDay(day).getTime())
+      && calendarDay(day).toISOString().slice(0, 10) === day
+  )) && custom.start <= custom.end;
+}
+
+// All ranges start at Manila midnight. The end timestamps are exclusive.
+export function getRangeForPreset(preset, custom = {}, now = new Date()) {
+  const today = businessDateKey(now);
   switch (preset) {
-    case 'today': {
-      const start = startOfDay(now);
-      const end = endOfDay(now);
-      const comparisonStart = startOfDay(addDays(now, -1));
-      const comparisonEnd = endOfDay(addDays(now, -1));
-      return { start, end, comparisonStart, comparisonEnd };
-    }
-    case 'yesterday': {
-      const y = addDays(now, -1);
-      const start = startOfDay(y);
-      const end = endOfDay(y);
-      const comparisonStart = startOfDay(addDays(y, -1));
-      const comparisonEnd = endOfDay(addDays(y, -1));
-      return { start, end, comparisonStart, comparisonEnd };
-    }
-    case 'this_week': {
-      const start = startOfWeek(now);
-      const end = endOfWeek(now);
-      const comparisonStart = addDays(start, -7);
-      const comparisonEnd = addDays(end, -7);
-      return { start, end, comparisonStart, comparisonEnd };
-    }
+    case 'today':
+      return range(today, addDays(today, 1), addDays(today, -1), today);
+    case 'yesterday':
+      return range(addDays(today, -1), today, addDays(today, -2), addDays(today, -1));
+    case 'this_week':
     case 'last_week': {
-      const start = addDays(startOfWeek(now), -7);
-      const end = addDays(endOfWeek(now), -7);
-      const comparisonStart = addDays(start, -7);
-      const comparisonEnd = addDays(end, -7);
-      return { start, end, comparisonStart, comparisonEnd };
+      const weekday = calendarDay(today).getUTCDay();
+      const monday = addDays(today, -((weekday + 6) % 7));
+      const start = preset === 'this_week' ? monday : addDays(monday, -7);
+      return range(start, addDays(start, 7), addDays(start, -7), start);
     }
-    case 'this_month': {
-      const start = startOfMonth(now);
-      const end = endOfMonth(now);
-      const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return {
-        start,
-        end,
-        comparisonStart: startOfMonth(prevMonthDate),
-        comparisonEnd: endOfMonth(prevMonthDate),
-      };
-    }
+    case 'this_month':
     case 'last_month': {
-      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const start = startOfMonth(d);
-      const end = endOfMonth(d);
-      const prevMonthDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-      return {
-        start,
-        end,
-        comparisonStart: startOfMonth(prevMonthDate),
-        comparisonEnd: endOfMonth(prevMonthDate),
-      };
+      const current = preset === 'this_month' ? 0 : -1;
+      return range(
+        monthStart(today, current),
+        monthStart(today, current + 1),
+        monthStart(today, current - 1),
+        monthStart(today, current),
+      );
     }
     case 'custom': {
-      const start = startOfDay(new Date(custom.start));
-      const end = endOfDay(new Date(custom.end));
-      const lengthMs = end.getTime() - start.getTime();
-      const comparisonEnd = new Date(start.getTime() - 1);
-      const comparisonStart = new Date(comparisonEnd.getTime() - lengthMs);
-      return { start, end, comparisonStart, comparisonEnd };
+      if (!isValidCustomRange(custom)) throw new Error('Choose a valid date range.');
+      const end = addDays(custom.end, 1);
+      const length = (calendarDay(end) - calendarDay(custom.start)) / DAY_MS;
+      return range(custom.start, end, addDays(custom.start, -length), custom.start);
     }
     default:
       throw new Error(`Unknown preset: ${preset}`);
   }
 }
 
-function addDays(d, n) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-// Human label for the currently selected period, e.g. "September 1–24, 2026"
 export function formatRangeLabel(start, end) {
-  const sameDay = start.toDateString() === end.toDateString();
-  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-  const monthFmt = { month: 'long' };
-  const yearFmt = { year: 'numeric' };
-
-  if (sameDay) {
-    return start.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
-  }
-  if (sameMonth) {
-    return `${start.toLocaleDateString('en-PH', monthFmt)} ${start.getDate()}\u2013${end.getDate()}, ${start.toLocaleDateString('en-PH', yearFmt)}`;
-  }
-  return `${start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })} \u2013 ${end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const lastDay = new Date(end.getTime() - 1);
+  const formatter = new Intl.DateTimeFormat('en-PH', {
+    timeZone: BUSINESS_TIME_ZONE, month: 'short', day: 'numeric', year: 'numeric',
+  });
+  return formatter.formatRange(start, lastDay);
 }
 
-export function formatDateShort(d) {
-  return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+export function formatDateShort(date) {
+  const key = businessDateKey(date);
+  return midnight(key).toLocaleDateString('en-PH', {
+    timeZone: BUSINESS_TIME_ZONE, month: 'short', day: 'numeric',
+  });
 }
 
-export function formatDateTime(d) {
-  const date = new Date(d);
+export function formatDateTime(value) {
+  const date = new Date(value);
   return {
-    date: date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }),
-    time: date.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true }),
+    date: date.toLocaleDateString('en-PH', {
+      timeZone: BUSINESS_TIME_ZONE, month: 'short', day: 'numeric', year: 'numeric',
+    }),
+    time: date.toLocaleTimeString('en-PH', {
+      timeZone: BUSINESS_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true,
+    }),
   };
 }
 
 export function formatPeso(amount) {
-  return `\u20B1${Number(amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-export function percentChange(current, previous) {
-  if (!previous) return current > 0 ? 100 : 0;
-  return ((current - previous) / previous) * 100;
+  return `₱${Number(amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

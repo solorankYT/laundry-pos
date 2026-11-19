@@ -1,101 +1,86 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../hooks/useAuth'
+import { PAYMENT_METHODS, orderActionError, isRejectedOrderWrite } from './orderData'
 import {
   X,
   Zap,
   Plus,
   Minus,
   NotebookPen,
-  CheckCircle2,
-  CircleDollarSign,
 } from 'lucide-react'
 
+function orderLines(rows, type) {
+  const items = {}
+
+  for (const row of rows ?? []) {
+    const isService = type === 'service'
+    const id = isService ? row.service_id : row.addon_id
+    const quantity = Number(row.quantity)
+    items[id] = {
+      id,
+      name: isService ? row.service_name : row.addon_name ?? row.addons?.name ?? 'Add-on',
+      price: Number(isService ? row.price : row.unit_price),
+      quantity: (items[id]?.quantity ?? 0) + quantity,
+    }
+  }
+
+  return items
+}
+
+function toManilaInput(value) {
+  if (!value) return ''
+  return new Date(Date.parse(value) + 8 * 60 * 60 * 1000).toISOString().slice(0, 16)
+}
+
 export default function NewOrderForm({ order, onClose, onCreated }) {
-  const { user } = useAuth()
   const nameRef = useRef(null)
+  const request = useRef(null)
+  const submittingRef = useRef(false)
   const isEditing = !!order
 
   const [services, setServices] = useState([])
   const [addons, setAddons] = useState([])
-  const [selectedServices, setSelectedServices] = useState({})
-  const [selectedAddons, setSelectedAddons] = useState({})
-  const [customerName, setCustomerName] = useState('')
-  const [paymentStatus, setPaymentStatus] = useState(null)
-  const [notes, setNotes] = useState('')
-  const [showNotes, setShowNotes] = useState(false)
+  const [catalogState, setCatalogState] = useState('loading')
+  const [catalogVersion, setCatalogVersion] = useState(0)
+  const [selectedServices, setSelectedServices] = useState(() => orderLines(order?.order_items, 'service'))
+  const [selectedAddons, setSelectedAddons] = useState(() => orderLines(order?.order_addons, 'addon'))
+  const [customerName, setCustomerName] = useState(order?.customer_name ?? '')
+  const [customerPhone, setCustomerPhone] = useState(order?.customer_phone ?? '')
+  const [pickupTime, setPickupTime] = useState(toManilaInput(order?.pickup_at))
+  const [paymentMethod, setPaymentMethod] = useState('')
+  const [notes, setNotes] = useState(order?.notes ?? '')
+  const [showNotes, setShowNotes] = useState(Boolean(order?.notes))
   const [submitting, setSubmitting] = useState(false)
+  const [retryLocked, setRetryLocked] = useState(false)
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
-    if (!user) return
-    fetchData()
-    if (!isEditing) {
-      setTimeout(() => nameRef.current?.focus(), 120)
+    const controller = new AbortController()
+
+    async function loadCatalog() {
+      const [serviceResult, addonResult] = await Promise.all([
+        supabase.from('services').select('id,name,price').eq('is_active', true).order('name').abortSignal(controller.signal),
+        supabase.from('addons').select('id,name,price').eq('is_active', true).order('name').abortSignal(controller.signal),
+      ])
+
+      if (controller.signal.aborted) return
+      if (serviceResult.error || addonResult.error) {
+        setCatalogState('failed')
+        return
+      }
+
+      setServices(serviceResult.data)
+      setAddons(addonResult.data)
+      setCatalogState('ready')
     }
-  }, [user])
 
-  // ── Pre-fill when editing an existing order ──────────
+    void loadCatalog()
+    return () => controller.abort()
+  }, [catalogVersion])
+
   useEffect(() => {
-    if (!order) return
-
-    setCustomerName(order.customer_name ?? '')
-    setPaymentStatus(
-      order.payment_status === true || order.payment_status === false
-        ? order.payment_status
-        : null
-    )
-    setNotes(order.notes ?? '')
-    if (order.notes) setShowNotes(true)
-
-    const svcMap = {}
-    ;(order.order_items ?? []).forEach(item => {
-      const key = item.service_id
-      if (key == null) return
-
-      if (svcMap[key]) {
-        svcMap[key].quantity += Number(item.quantity) || 0
-        return
-      }
-
-      svcMap[key] = {
-        id: key,
-        name: item.service_name,
-        price: Number(item.price),
-        quantity: Number(item.quantity) || 0,
-      }
-    })
-    setSelectedServices(svcMap)
-
-    const addonMap = {}
-    ;(order.order_addons ?? []).forEach(a => {
-      const key = a.addon_id
-      if (key == null) return
-
-      if (addonMap[key]) {
-        addonMap[key].quantity += Number(a.quantity) || 0
-        return
-      }
-
-      addonMap[key] = {
-        id: key,
-        name: a.addons?.name ?? 'Add-on',
-        price: Number(a.unit_price),
-        quantity: Number(a.quantity) || 0,
-      }
-    })
-    setSelectedAddons(addonMap)
-  }, [order])
-
-  const fetchData = async () => {
-    const [{ data: svcData }, { data: addonData }] = await Promise.all([
-      supabase.from('services').select('*').eq('is_active', true).order('name'),
-      supabase.from('addons').select('*').eq('is_active', true).order('name'),
-    ])
-
-    setServices(svcData ?? [])
-    setAddons(addonData ?? [])
-  }
+    if (!isEditing) nameRef.current?.focus()
+  }, [isEditing])
 
   // ── Service helpers ──────────────────────────────────
   const toggleService = (service) => {
@@ -199,15 +184,16 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
   const applyPreset = () => {
     const keywords = ['wash', 'dry', 'fold']
 
+    const bundle = new Map()
+    for (const keyword of keywords) {
+      const service = services.find(item => item.name.toLowerCase().includes(keyword))
+      if (service) bundle.set(service.id, service)
+    }
+
     setSelectedServices(prev => {
       const updated = { ...prev }
 
-      keywords.forEach(keyword => {
-        const svc = services.find(s =>
-          s.name.toLowerCase().includes(keyword)
-        )
-
-        if (!svc) return
+      for (const svc of bundle.values()) {
 
         if (updated[svc.id]) {
           updated[svc.id] = {
@@ -220,7 +206,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
             quantity: 1,
           }
         }
-      })
+      }
 
       return updated
     })
@@ -251,149 +237,60 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
 
   const itemCount = serviceCount + addonCount
 
-  // ── Submit ────────────────────────────────────────────
   const handleSubmit = async () => {
-    const errs = {}
+    if (submittingRef.current || catalogState !== 'ready') return
+    const errors = {}
 
-    if (!customerName.trim()) errs.name = 'Enter customer name'
-    if (!itemCount) errs.services = 'Select at least one service'
-    if (paymentStatus === null) errs.payment = 'Select payment status'
+    if (!customerName.trim()) errors.name = 'Enter customer name'
+    if (!serviceCount) errors.services = 'Select at least one service'
 
-    if (Object.keys(errs).length) {
-      setErrors(errs)
+    if (Object.keys(errors).length) {
+      setErrors(errors)
       return
     }
 
+    request.current ??= {
+      p_request_id: crypto.randomUUID(),
+      p_order_id: order?.id ?? null,
+      p_customer_name: customerName.trim(),
+      p_customer_phone: customerPhone.trim() || null,
+      p_pickup_at: pickupTime ? new Date(`${pickupTime}:00+08:00`).toISOString() : null,
+      p_notes: notes.trim() || null,
+      p_items: Object.values(selectedServices).map(({ id, quantity }) => ({ id, quantity })),
+      p_addons: Object.values(selectedAddons).map(({ id, quantity }) => ({ id, quantity })),
+      p_payment_method: paymentMethod || null,
+      p_expected_total: Number(total.toFixed(2)),
+      p_expected_updated_at: order?.updated_at ?? null,
+    }
+
+    submittingRef.current = true
     setSubmitting(true)
     setErrors({})
-
     try {
-      if (isEditing) {
-        await submitEdit()
-      } else {
-        await submitCreate()
+      const { data: orderId, error, status } = await supabase.rpc('save_order', request.current)
+      if (error) {
+        if (isRejectedOrderWrite(error, status)) {
+          request.current = null
+          setRetryLocked(false)
+          setErrors({ submit: orderActionError(error, 'Order was not saved. Check the details and try again.') })
+        } else {
+          setRetryLocked(true)
+          setErrors({ submit: 'The save could not be confirmed. Retry this same order before entering it again.' })
+        }
+        return
       }
 
-      onCreated()
-    } catch (err) {
-      console.error(err)
-      setErrors({
-        submit: isEditing
-          ? 'Failed to save changes. Try again.'
-          : 'Failed to create order. Try again.',
-      })
+      onCreated(orderId)
+    } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
 
-  const submitCreate = async () => {
-    const { data: newOrder, error: orderErr } = await supabase
-      .from('orders')
-      .insert({
-        customer_name: customerName.trim(),
-        payment_status: paymentStatus,
-        notes: notes.trim() || null,
-        total,
-        created_by: user.id,
-        status: 'pending',
-        created_by_email: user.email,
-      })
-      .select()
-      .single()
-
-    if (orderErr) throw orderErr
-
-    await insertLineItems(newOrder.id)
-  }
-
-  const submitEdit = async () => {
-  if (!Number.isFinite(total)) {
-    throw new Error('Invalid total')
-  }
-
-  const oldItemIds = (order.order_items ?? [])
-    .map(item => item.id)
-    .filter(Boolean)
-
-  const oldAddonIds = (order.order_addons ?? [])
-    .map(addon => addon.id)
-    .filter(Boolean)
-
-  // 1. Update the existing order
-  const { error: orderErr } = await supabase
-    .from('orders')
-    .update({
-      customer_name: customerName.trim(),
-      payment_status: paymentStatus,
-      notes: notes.trim() || null,
-      total,
-    })
-    .eq('id', order.id)
-
-  if (orderErr) {
-    throw orderErr
-  }
-
-  // 2. Delete old add-ons
-  if (oldAddonIds.length) {
-    const { error: addonDeleteErr } = await supabase
-      .from('order_addons')
-      .delete()
-      .in('id', oldAddonIds)
-
-    if (addonDeleteErr) {
-      throw addonDeleteErr
-    }
-  }
-
-  // 3. Delete old service items
-  if (oldItemIds.length) {
-    const { error: itemDeleteErr } = await supabase
-      .from('order_items')
-      .delete()
-      .in('id', oldItemIds)
-
-    if (itemDeleteErr) {
-      throw itemDeleteErr
-    }
-  }
-
-  // 4. Insert the current form items
-  await insertLineItems(order.id)
-}
-
-  const insertLineItems = async (orderId) => {
-    if (serviceCount > 0) {
-      const items = Object.values(selectedServices).map(i => ({
-        order_id: orderId,
-        service_id: i.id,
-        service_name: i.name,
-        price: i.price,
-        quantity: i.quantity,
-      }))
-
-      const { error: itemsErr } = await supabase
-        .from('order_items')
-        .insert(items)
-
-      if (itemsErr) throw itemsErr
-    }
-
-    if (addonCount > 0) {
-      const addonRows = Object.values(selectedAddons).map(i => ({
-        order_id: orderId,
-        addon_id: i.id,
-        quantity: i.quantity,
-        unit_price: i.price,
-        total: i.price * i.quantity,
-      }))
-
-      const { error: addonsErr } = await supabase
-        .from('order_addons')
-        .insert(addonRows)
-
-      if (addonsErr) throw addonsErr
-    }
+  const handleClose = () => {
+    if (submittingRef.current) return
+    if (retryLocked && !window.confirm('This order may have been saved. Close and check the order list before registering it again?')) return
+    onClose()
   }
 
   return (
@@ -404,7 +301,8 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={submitting}
             aria-label={isEditing ? 'Close edit order' : 'Close new order'}
             className="
               w-10 h-10 shrink-0
@@ -440,9 +338,9 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         </div>
       </header>
 
-      {/* CUSTOMER + PAYMENT */}
+      {/* CUSTOMER AND PICKUP */}
       <section className="shrink-0 bg-white border-b border-neutral-200 px-4 py-4">
-        <div className="space-y-4">
+        <fieldset disabled={submitting || retryLocked} className="space-y-3">
 
           {/* Customer */}
           <div>
@@ -459,6 +357,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
               type="text"
               placeholder="Enter customer name"
               value={customerName}
+              maxLength={120}
               onChange={e => {
                 setCustomerName(e.target.value)
                 setErrors(p => ({ ...p, name: null }))
@@ -490,51 +389,28 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
             )}
           </div>
 
-          {/* Payment */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold tracking-wide text-neutral-500">
-                PAYMENT STATUS
-              </p>
-
-              <span className="text-[11px] text-neutral-400">
-                Required
-              </span>
-            </div>
-
-            <div className="flex gap-3">
-              <PayToggle
-                label="Paid"
-                icon={CheckCircle2}
-                active={paymentStatus === true}
-                activeClass="bg-green-600 text-white border-green-600"
-                hasError={!!errors.payment}
-                onClick={() => {
-                  setPaymentStatus(true)
-                  setErrors(p => ({ ...p, payment: null }))
-                }}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-neutral-700">
+              Phone (optional)
+              <input
+                className="mt-1 block h-10 w-full rounded-lg border border-neutral-200 px-3"
+                type="tel"
+                maxLength={40}
+                value={customerPhone}
+                onChange={event => setCustomerPhone(event.target.value)}
               />
-
-              <PayToggle
-                label="Unpaid"
-                icon={CircleDollarSign}
-                active={paymentStatus === false}
-                activeClass="bg-red-500 text-white border-red-500"
-                hasError={!!errors.payment}
-                onClick={() => {
-                  setPaymentStatus(false)
-                  setErrors(p => ({ ...p, payment: null }))
-                }}
+            </label>
+            <label className="text-sm font-medium text-neutral-700">
+              Pickup date and time (Manila)
+              <input
+                className="mt-1 block h-10 w-full rounded-lg border border-neutral-200 px-3"
+                type="datetime-local"
+                value={pickupTime}
+                onChange={event => setPickupTime(event.target.value)}
               />
-            </div>
-
-            {errors.payment && (
-              <p className="mt-1.5 text-xs text-red-500">
-                {errors.payment}
-              </p>
-            )}
+            </label>
           </div>
-        </div>
+        </fieldset>
       </section>
 
       {/* SCROLLABLE CONTENT */}
@@ -548,6 +424,25 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         space-y-5
         pb-8
       ">
+
+        <fieldset
+          disabled={submitting || retryLocked}
+          inert={submitting || retryLocked ? true : undefined}
+          className="min-w-0 space-y-5"
+        >
+        {catalogState === 'loading' && <p role="status">Loading services…</p>}
+        {catalogState === 'failed' && (
+          <p role="alert" className="text-sm text-red-700">
+            Services could not be loaded.{' '}
+            <button type="button" className="underline" onClick={() => {
+              setCatalogState('loading')
+              setCatalogVersion(version => version + 1)
+            }}>Retry</button>
+          </p>
+        )}
+        {catalogState === 'ready' && services.length === 0 && (
+          <p role="status" className="text-sm text-neutral-600">Add at least one active service in the shop catalog to take orders.</p>
+        )}
 
       {/* SERVICES */}
         {services.length > 0 && (
@@ -672,6 +567,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
             <textarea
               placeholder="Special instructions..."
               value={notes}
+              maxLength={2000}
               onChange={e => setNotes(e.target.value)}
               rows={3}
               className="
@@ -697,6 +593,20 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         </div>
 
         <div className="h-4" />
+        {!isEditing && (
+          <label className="block text-sm font-medium text-neutral-700">
+            Payment at drop-off
+            <select
+              className="mt-1 block h-11 w-full rounded-lg border border-neutral-200 bg-white px-3"
+              value={paymentMethod}
+              onChange={event => setPaymentMethod(event.target.value)}
+            >
+              <option value="">Pay at pickup</option>
+              {PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}
+            </select>
+          </label>
+        )}
+        </fieldset>
       </main>
 
       {/* STICKY BOTTOM CHECKOUT */}
@@ -753,7 +663,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
         )}
 
         {errors.submit && (
-          <p className="
+          <p role="alert" className="
             text-red-500
             text-xs
             mb-3
@@ -793,9 +703,9 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
             onClick={handleSubmit}
             disabled={
               submitting ||
-              !itemCount ||
+              !serviceCount ||
               !customerName.trim() ||
-              paymentStatus === null
+              catalogState !== 'ready'
             }
             className="
               min-h-[54px]
@@ -819,7 +729,7 @@ export default function NewOrderForm({ order, onClose, onCreated }) {
           >
             {submitting
               ? (isEditing ? 'Saving…' : 'Creating…')
-              : (isEditing ? 'Save Changes' : 'Complete Order')}
+              : retryLocked ? 'Retry save' : (isEditing ? 'Save Changes' : 'Complete Order')}
           </button>
         </div>
 
@@ -866,50 +776,6 @@ function Section({ title, error, children }) {
   )
 }
 //
-
-function PayToggle({
-  label,
-  icon: Icon,
-  active,
-  activeClass,
-  hasError,
-  onClick,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`
-        flex-1
-        min-h-[50px]
-        px-4
-        rounded-lg
-        border
-        text-sm
-        font-semibold
-        flex items-center justify-center gap-2
-        focus:outline-none
-        focus-visible:ring-2
-        focus-visible:ring-blue-200
-        active:scale-[0.99]
-        transition
-        ${active
-          ? activeClass
-          : hasError
-            ? 'bg-white text-neutral-600 border-red-300'
-            : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}
-      `}
-    >
-      <Icon
-        size={18}
-        strokeWidth={2.2}
-        className={active ? '' : 'text-neutral-400'}
-      />
-
-      {label}
-    </button>
-  )
-}
 
 /* ── SERVICE LOGOS ───────────────────────────────────── */
 

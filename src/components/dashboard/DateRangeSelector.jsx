@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FiChevronDown, FiCalendar } from 'react-icons/fi';
-import { PRESETS } from '../../lib/dateRanges';
+import { PRESETS, isValidCustomRange } from '../../lib/dateRanges';
 
 export default function DateRangeSelector({
   preset,
@@ -25,18 +25,10 @@ export default function DateRangeSelector({
     };
   }, []);
 
-  // Keep draft in sync if the parent changes the custom range
-  useEffect(() => {
-    setDraftCustom(customRange || {});
-  }, [customRange]);
-
   const currentLabel =
     PRESETS.find((p) => p.key === preset)?.label || 'Today';
 
-  const hasValidRange =
-    draftCustom.start &&
-    draftCustom.end &&
-    draftCustom.start <= draftCustom.end;
+  const hasValidRange = isValidCustomRange(draftCustom);
 
   return (
     <div className="relative" ref={ref}>
@@ -44,7 +36,10 @@ export default function DateRangeSelector({
       {/* TRIGGER */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open) setDraftCustom(customRange || {});
+          setOpen(!open);
+        }}
         className="
           flex items-center gap-2
           h-10
@@ -157,12 +152,13 @@ export default function DateRangeSelector({
 
                 {/* FROM */}
                 <div className="w-full">
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1.5">
+                  <label htmlFor="report-date-from" className="block text-[11px] font-medium text-gray-400 mb-1.5">
                     From
                   </label>
 
                   <input
                     type="date"
+                    id="report-date-from"
                     value={draftCustom.start || ''}
                     onChange={(e) =>
                       setDraftCustom((c) => ({
@@ -197,12 +193,13 @@ export default function DateRangeSelector({
 
                 {/* TO */}
                 <div className="w-full">
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1.5">
+                  <label htmlFor="report-date-to" className="block text-[11px] font-medium text-gray-400 mb-1.5">
                     To
                   </label>
 
                   <input
                     type="date"
+                    id="report-date-to"
                     value={draftCustom.end || ''}
                     onChange={(e) =>
                       setDraftCustom((c) => ({

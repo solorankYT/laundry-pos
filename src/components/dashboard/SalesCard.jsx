@@ -7,12 +7,9 @@ export default function SalesCard({
   preset,
 }) {
   const title = {
-    today: "Today's Sales",
-    yesterday: "Yesterday's Sales",
-    '7days': 'Sales — Last 7 Days',
-    '30days': 'Sales — Last 30 Days',
-    custom: 'Sales — Custom Range',
-  }[preset] || 'Sales';
+    today: "Today's Collections",
+    yesterday: "Yesterday's Collections",
+  }[preset] || 'Collections';
 
   const hasTrend = typeof trendPct === 'number';
   const positive = trendPct >= 0;
