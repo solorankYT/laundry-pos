@@ -38,6 +38,15 @@ export function fetchPaymentsInRange(start, end, client = supabase) {
   return fetchInRange('order_payments', PAYMENT_COLUMNS, 'recorded_at', start, end, client);
 }
 
+export async function fetchReadyOrderCount(signal) {
+  const { count, error } = await supabase.from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'done')
+    .abortSignal(signal);
+  if (error || count === null) throw error ?? new Error('Ready order count unavailable.');
+  return count;
+}
+
 export async function fetchReportData({ start, end }, client = supabase) {
   const [orders, payments] = await Promise.all([
     fetchOrdersInRange(start, end, client),
