@@ -12,7 +12,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate('/orders', { replace: true })
+      navigate('/', { replace: true })
     }
   }, [user, authLoading, navigate])
 
@@ -22,9 +22,11 @@ export default function Login() {
     setLoading(true)
     try {
       await signIn(email, password)
-      navigate('/orders', { replace: true })
-    } catch {
-      setError('Invalid email or password')
+      navigate('/', { replace: true })
+    } catch (error) {
+      setError(error?.code === 'invalid_credentials'
+        ? 'Invalid email or password'
+        : 'Could not sign in. Check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -41,13 +43,18 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
+        <h1 className="mb-1 text-center text-2xl font-bold">
+          {import.meta.env.VITE_SHOP_NAME?.trim() || 'Laundry POS'}
+        </h1>
+        <p className="mb-6 text-center text-sm text-stone-600">Staff sign-in</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
+            <label htmlFor="staff-email" className="block text-sm font-medium text-gray-700">Email</label>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              id="staff-email"
+              autoComplete="username"
               type="email"
               placeholder="email@example.com"
               required
@@ -55,17 +62,19 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label htmlFor="staff-password" className="block text-sm font-medium text-gray-700">Password</label>
             <input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              id="staff-password"
+              autoComplete="current-password"
               type="password"
               placeholder="password"
               required
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
           <button
             type="submit"
             disabled={loading}

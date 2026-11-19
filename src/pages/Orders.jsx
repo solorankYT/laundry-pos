@@ -6,7 +6,7 @@ import OrderRow from '../components/orders/OrderRow'
 import OrderCard from '../components/orders/OrderCard'
 import OrderDrawer from '../components/orders/OrderDrawer'
 import NewOrderForm from '../components/orders/NewOrderForm'
-import { ORDER_ROW_GRID } from '../components/orders/orderUi'
+import { ORDER_ROW_GRID, ORDER_SELECT, orderActionError, searchPattern } from '../components/orders/orderData'
 import { useSearchParams } from 'react-router-dom'
 import {
   Search,
@@ -20,247 +20,184 @@ const TABS = [
   { key: 'pending', label: 'Pending' },
   { key: 'done', label: 'Done' },
   { key: 'released', label: 'Released' },
+  { key: 'cancelled', label: 'Voided' },
   { key: 'all', label: 'All' },
 ]
 
-const ORDER_SELECT = `
-  *,
-  order_items(      
-    id,
-    service_id,
-    service_name,
-    price,
-    quantity
-  ),
-  order_addons(
-    id,
-    addon_id,
-    quantity,
-    unit_price,
-    total,
-    addons(name)
-  )
-`
-
-const SORT_PRIORITY = (a, b) => {
-  if (!a.payment_status && b.payment_status) return -1
-  if (a.payment_status && !b.payment_status) return 1
-
-  if (a.status === 'pending' && b.status !== 'pending') return -1
-  if (a.status !== 'pending' && b.status === 'pending') return 1
-
-  return new Date(b.created_at) - new Date(a.created_at)
-}
+const PAGE_SIZE = 25
 
 export default function Orders() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const searchRef = useRef(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('status')
+  const filter = TABS.some(tab => tab.key === activeTab) ? activeTab : 'pending'
 
   const [orders, setOrders] = useState([])
-  const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('pending')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [search, setSearch] = useState('')
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [refresh, setRefresh] = useState(0)
 
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [openPayment, setOpenPayment] = useState(false)
+  const paramOpensForm = searchParams.get('action') === 'new'
 
-  useEffect(() => {
-    if (searchParams.get('action') === 'new') {
-      handleNewOrder()
-      setSearchParams({}, { replace: true })
-    }
-  }, [searchParams])
-
-  const fetchOrders = async () => {
-    setLoading(true)
-
-    const { data, error } = await supabase
-      .from('orders')
-      .select(ORDER_SELECT)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      const c = { all: data.length }
-
-      TABS.forEach(tab => {
-        if (tab.key !== 'all') {
-          c[tab.key] = data.filter(
-            order => order.status === tab.key
-          ).length
-        }
-      })
-
-      setCounts(c)
-
-      const filtered =
-        filter === 'all'
-          ? data
-          : data.filter(order => order.status === filter)
-
-      setOrders([...filtered].sort(SORT_PRIORITY))
-    }
-
-    setLoading(false)
+  function reloadOrders() {
+    setRefresh(value => value + 1)
   }
 
   useEffect(() => {
     if (!user) return
-
-    fetchOrders()
-
     const channel = supabase
       .channel('orders-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
-        },
-        fetchOrders
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, reloadOrders)
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user, filter])
+    return () => { void supabase.removeChannel(channel) }
+  }, [user])
 
   useEffect(() => {
-    if (!selectedOrder) return
+    if (!user) return
+    const controller = new AbortController()
+    const term = search.trim()
+    const start = page * PAGE_SIZE
 
-    const updated = orders.find(
-      order => order.id === selectedOrder.id
-    )
+    async function fetchOrders() {
+      setLoading(true)
+      setLoadError('')
 
-    if (updated) {
-      setSelectedOrder(updated)
+      let query = supabase
+        .from('orders')
+        .select(ORDER_SELECT)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(start, start + PAGE_SIZE)
+        .abortSignal(controller.signal)
+
+      if (term) query = query.ilike('search_text', searchPattern(term))
+      else if (filter !== 'all') query = query.eq('status', filter)
+
+      const { data, error } = await query
+      if (controller.signal.aborted) return
+
+      if (error) {
+        setLoadError('Orders could not be loaded. Check the connection and retry.')
+      } else if (data.length === 0 && page > 0) {
+        setPage(value => value - 1)
+        return
+      } else {
+        setOrders(data.slice(0, PAGE_SIZE))
+        setHasMore(data.length > PAGE_SIZE)
+        setSelectedOrder(current => data.find(order => order.id === current?.id) ?? current)
+      }
+
+      setLoading(false)
     }
-  }, [orders])
 
-  const updateStatus = async (id, status) => {
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === id
-          ? { ...order, status }
-          : order
-      )
-    )
-
-    if (status === 'released') {
-      setSelectedOrder(null)
+    const timer = window.setTimeout(fetchOrders, term ? 250 : 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
     }
+  }, [user, filter, search, page, refresh])
 
-    const { error } = await supabase
-      .from('orders')
-      .update({ status })
-      .eq('id', id)
+  async function updateStatus(id, status) {
+    setActionError('')
+    const { error } = await supabase.rpc('advance_order', { p_order_id: id, p_status: status })
 
     if (error) {
-      console.error('Failed to update order status:', error)
-      await fetchOrders()
-      return
+      setActionError(orderActionError(error, 'The status update could not be confirmed. Check the order and retry.'))
+    } else {
+      setSelectedOrder(order => order?.id === id ? { ...order, status } : order)
     }
 
-    await fetchOrders()
+    reloadOrders()
   }
 
-  const markPaid = async id => {
-    setOrders(prev =>
-      prev.map(order =>
-        order.id === id
-          ? { ...order, payment_status: true }
-          : order
-      )
-    )
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ payment_status: true })
-      .eq('id', id)
+  async function markPaid(id, request) {
+    const { error, status } = await supabase.rpc('record_order_payment', {
+      p_order_id: id,
+      p_request_id: request.id,
+      p_method: request.method,
+      p_expected_total: request.amount,
+    })
 
     if (error) {
-      console.error('Failed to mark order as paid:', error)
-      await fetchOrders()
-      return
+      return { error, status }
     }
 
-    await fetchOrders()
+    setSelectedOrder(order => order?.id === id ? { ...order, payment_status: true } : order)
+    reloadOrders()
+    return {}
   }
 
-  const handleNewOrder = () => {
+  async function voidOrder(id, reason) {
+    const { error } = await supabase.rpc('void_order', { p_order_id: id, p_reason: reason })
+
+    if (error) {
+      return orderActionError(error, 'The void could not be confirmed. Refresh the order before retrying.')
+    }
+
+    setSelectedOrder(null)
+    reloadOrders()
+    return ''
+  }
+
+  function handleSearch(value) {
+    setSearch(value)
+    setPage(0)
+  }
+
+  function openOrder(order, showPayment = false) {
+    setActionError('')
+    setOpenPayment(showPayment)
+    setSelectedOrder(order)
+  }
+
+  function handleNewOrder() {
     setSelectedOrder(null)
     setEditingOrder(null)
     setShowForm(true)
   }
 
-  const handleEditOrder = async order => {
+  function handleEditOrder(order) {
     setSelectedOrder(null)
-    setShowForm(false)
-
-    const { data, error } = await supabase
-      .from('orders')
-      .select(ORDER_SELECT)
-      .eq('id', order.id)
-      .single()
-
-    setEditingOrder(!error && data ? data : order)
+    setEditingOrder(order)
   }
 
-  const handleDeleteOrder = async orderId => {
-    try {
-      const { error: addonsError } = await supabase
-        .from('order_addons')
-        .delete()
-        .eq('order_id', orderId)
-
-      if (addonsError) throw addonsError
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('order_id', orderId)
-
-      if (itemsError) throw itemsError
-
-      const { error: orderError } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderId)
-
-      if (orderError) throw orderError
-
-      setSelectedOrder(null)
-      setEditingOrder(null)
-
-      await fetchOrders()
-    } catch (error) {
-      console.error('Failed to delete order:', error)
-      alert('Failed to delete order. Please try again.')
+  function closeForm() {
+    setShowForm(false)
+    setEditingOrder(null)
+    if (paramOpensForm) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('action')
+      setSearchParams(params, { replace: true })
     }
   }
 
-  const handleFormCreated = async () => {
-    setShowForm(false)
-    setEditingOrder(null)
-    await fetchOrders()
+  async function handleFormCreated(orderId) {
+    closeForm()
+    setActionError('')
+    reloadOrders()
+
+    const { data, error } = await supabase.from('orders').select(ORDER_SELECT).eq('id', orderId).single()
+    if (error) {
+      setActionError('The order was saved, but its details could not be loaded. Use the order list to reopen it.')
+    } else {
+      openOrder(data)
+    }
   }
 
-  const displayedOrders = search.trim()
-    ? orders.filter(order =>
-        order.customer_name
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      )
-    : orders
-
   return (
-    <div className="flex h-screen bg-blue-50/50">
+    <div className="flex h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] bg-blue-50/50 md:h-dvh">
 
-      <main className="flex-1 ml-0 flex flex-col overflow-hidden relative">
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* SEARCH + NEW ORDER */}
         <div className="bg-white border-b border-blue-100 px-4 py-3 flex items-center gap-3">
@@ -279,9 +216,11 @@ export default function Orders() {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search customer..."
+              placeholder="Search claim number, phone, or customer"
+              aria-label="Search orders across all statuses"
+              maxLength={120}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => handleSearch(e.target.value)}
               className="
                 w-full h-10
                 pl-9 pr-9
@@ -303,7 +242,7 @@ export default function Orders() {
               <button
                 type="button"
                 onClick={() => {
-                  setSearch('')
+                  handleSearch('')
                   searchRef.current?.focus()
                 }}
                 aria-label="Clear search"
@@ -355,17 +294,18 @@ export default function Orders() {
           overflow-x-auto
         ">
           {TABS.map(tab => {
-            const count = counts[tab.key]
-            const isActive = filter === tab.key
+            const isActive = !search.trim() && filter === tab.key
 
             return (
               <button
                 type="button"
                 key={tab.key}
                 onClick={() => {
-                  setFilter(tab.key)
-                  setSearch('')
+                  setSearchParams({ status: tab.key })
+                  handleSearch('')
+                  setActionError('')
                 }}
+                aria-pressed={isActive}
                 className={`
                   shrink-0
                   flex items-center gap-1.5
@@ -383,37 +323,28 @@ export default function Orders() {
               >
                 {tab.label}
 
-                {typeof count === 'number' && count > 0 && (
-                  <span
-                    className={`
-                      text-[11px]
-                      font-semibold
-                      min-w-[18px]
-                      px-1
-                      rounded-full
-                      leading-[1.4]
-                      text-center
-                      tabular-nums
-
-                      ${
-                        isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-white text-slate-400'
-                      }
-                    `}
-                  >
-                    {count}
-                  </span>
-                )}
               </button>
             )
           })}
         </div>
 
-        {/* ORDER LIST */}
-        <div className="flex-1 overflow-y-auto">
+        {search.trim() && (
+          <p className="px-4 py-2 text-xs text-slate-600">Searching all order statuses</p>
+        )}
 
-          {loading ? (
+        {actionError && !selectedOrder && (
+          <p role="alert" className="mx-4 my-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</p>
+        )}
+
+        {/* ORDER LIST */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+
+          {loadError ? (
+            <div role="alert" className="mx-4 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              {loadError}{' '}
+              <button type="button" className="font-semibold underline" onClick={reloadOrders}>Retry</button>
+            </div>
+          ) : loading ? (
             <>
               {/* Desktop skeleton */}
               <div className="
@@ -430,18 +361,18 @@ export default function Orders() {
               </div>
 
               {/* Mobile skeleton */}
-              <div className="lg:hidden px-3 pt-3 pb-28 space-y-2.5">
+              <div className="lg:hidden px-3 pt-3 pb-4 space-y-2.5">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <SkeletonCard key={i} />
                 ))}
               </div>
             </>
-          ) : displayedOrders.length === 0 ? (
+          ) : orders.length === 0 ? (
 
             search.trim() ? (
               <NoResults
                 query={search}
-                onClear={() => setSearch('')}
+                onClear={() => handleSearch('')}
               />
             ) : (
               <EmptyState
@@ -481,15 +412,13 @@ export default function Orders() {
                   <span className="text-right">Actions</span>
                 </div>
 
-                {displayedOrders.map(order => (
+                {orders.map(order => (
                   <OrderRow
                     key={order.id}
                     order={order}
-                    onClick={() => setSelectedOrder(order)}
+                    onClick={() => openOrder(order)}
                     onUpdateStatus={updateStatus}
-                    onMarkPaid={markPaid}
-                    onEdit={handleEditOrder}
-                    onDelete={handleDeleteOrder}
+                    onOpenPayment={() => openOrder(order, true)}
                     isActive={selectedOrder?.id === order.id}
                   />
                 ))}
@@ -501,18 +430,16 @@ export default function Orders() {
                 lg:hidden
                 px-3
                 pt-3
-                pb-28
+                pb-4
                 space-y-2.5
               ">
-                {displayedOrders.map(order => (
+                {orders.map(order => (
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onClick={() => setSelectedOrder(order)}
+                    onClick={() => openOrder(order)}
                     onUpdateStatus={updateStatus}
-                    onMarkPaid={markPaid}
-                    onEdit={handleEditOrder}
-                    onDelete={handleDeleteOrder}
+                    onOpenPayment={() => openOrder(order, true)}
                     isActive={selectedOrder?.id === order.id}
                   />
                 ))}
@@ -522,15 +449,20 @@ export default function Orders() {
 
         </div>
 
+        {!loading && !loadError && (page > 0 || hasMore) && (
+          <nav aria-label="Order pages" className="flex items-center justify-center gap-4 border-t border-blue-100 bg-white px-4 py-3 text-sm">
+            <button type="button" disabled={page === 0} onClick={() => setPage(value => value - 1)} className="rounded border px-3 py-2 disabled:opacity-40">Previous</button>
+            <span>Page {page + 1}</span>
+            <button type="button" disabled={!hasMore} onClick={() => setPage(value => value + 1)} className="rounded border px-3 py-2 disabled:opacity-40">Next</button>
+          </nav>
+        )}
+
         {/* NEW / EDIT ORDER FORM */}
-        {(showForm || editingOrder) && (
+        {(showForm || paramOpensForm || editingOrder) && (
           <NewOrderForm
             key={editingOrder?.id ?? 'new'}
             order={editingOrder}
-            onClose={() => {
-              setShowForm(false)
-              setEditingOrder(null)
-            }}
+            onClose={closeForm}
             onCreated={handleFormCreated}
           />
         )}
@@ -538,12 +470,15 @@ export default function Orders() {
         {/* ORDER DRAWER */}
         {selectedOrder && (
           <OrderDrawer
+            key={selectedOrder.id}
             order={selectedOrder}
+            actionError={actionError}
+            startPayment={openPayment}
             onClose={() => setSelectedOrder(null)}
             onUpdateStatus={updateStatus}
             onMarkPaid={markPaid}
             onEdit={handleEditOrder}
-            onDelete={handleDeleteOrder}
+            onVoid={role === 'manager' ? voidOrder : undefined}
           />
         )}
 
@@ -621,7 +556,7 @@ function NoResults({ query, onClear }) {
       </p>
 
       <p className="text-slate-400 text-xs mt-1 mb-4">
-        Try a different name
+        Try another claim number, phone, or customer
       </p>
 
       <button

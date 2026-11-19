@@ -9,12 +9,12 @@ const GROUPINGS = [
   { key: 'month', label: 'Monthly' },
 ];
 
-export default function RevenueChart({ orders }) {
+export default function RevenueChart({ payments }) {
   const [groupBy, setGroupBy] = useState('day');
 
-  const series = useMemo(() => getRevenueSeries(orders, groupBy), [orders, groupBy]);
+  const series = useMemo(() => getRevenueSeries(payments, groupBy), [payments, groupBy]);
   const totalRevenue = series.reduce((s, r) => s + r.revenue, 0);
-  const totalOrders = series.reduce((s, r) => s + r.orders, 0);
+  const totalPayments = series.reduce((s, r) => s + r.payments, 0);
   const avgPerDay = series.length ? totalRevenue / series.length : 0;
 
   const chartData = series.map((s) => ({
@@ -25,7 +25,7 @@ export default function RevenueChart({ orders }) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-800">Revenue</h3>
+        <h3 className="text-sm font-semibold text-gray-800">Collections</h3>
         <div className="flex gap-1 bg-gray-100 rounded-md p-0.5">
           {GROUPINGS.map((g) => (
             <button
@@ -61,7 +61,7 @@ export default function RevenueChart({ orders }) {
                 width={44}
               />
               <Tooltip
-                formatter={(v) => [formatPeso(v), 'Revenue']}
+                formatter={(v) => [formatPeso(v), 'Collections']}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
               />
               <Area type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={2} fill="url(#revFill)" />
@@ -72,16 +72,16 @@ export default function RevenueChart({ orders }) {
 
       <div className="flex gap-6 mt-4 pt-3 border-t border-gray-100">
         <div>
-          <p className="text-xs text-gray-400">Total Revenue</p>
+          <p className="text-xs text-gray-400">Total Collected</p>
           <p className="text-sm font-semibold text-gray-800">{formatPeso(totalRevenue)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400">Avg / Day</p>
+          <p className="text-xs text-gray-400">Avg per group</p>
           <p className="text-sm font-semibold text-gray-800">{formatPeso(avgPerDay)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400">Orders</p>
-          <p className="text-sm font-semibold text-gray-800">{totalOrders}</p>
+          <p className="text-xs text-gray-400">Payments</p>
+          <p className="text-sm font-semibold text-gray-800">{totalPayments}</p>
         </div>
       </div>
     </div>

@@ -3,14 +3,10 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import { Banknote } from 'lucide-react'
 import {
   MoneyLine,
-  ORDER_ROW_GRID,
   OrderConfirm,
   OrderStatus,
-  activateOnEnter,
-  formatServices,
-  orderCode,
-  useOrderQuickActions,
 } from './orderUi'
+import { ORDER_ROW_GRID, activateOnEnter, formatServices, orderCode, useOrderQuickActions } from './orderData'
 
 dayjs.extend(relativeTime)
 
@@ -18,7 +14,7 @@ export default function OrderRow({
   order,
   onClick,
   onUpdateStatus,
-  onMarkPaid,
+  onOpenPayment,
   isActive,
 }) {
   const {
@@ -29,11 +25,9 @@ export default function OrderRow({
     advance,
     releaseBlocked,
     askAdvance,
-    askPay,
   } = useOrderQuickActions({
     order,
     onUpdateStatus,
-    onMarkPaid,
   })
 
   const servicesSummary = formatServices(order.order_items)
@@ -106,19 +100,19 @@ export default function OrderRow({
           onClick={e => e.stopPropagation()}
           onKeyDown={e => e.stopPropagation()}
         >
-          {order.status === 'released' ? (
+          {['released', 'cancelled'].includes(order.status) ? (
             <span className="text-xs font-medium text-slate-400 pr-1">
-              Released
+              {order.status === 'released' ? 'Released' : 'Voided'}
             </span>
           ) : (
             <>
               {!isPaid && (
                 <ActionBtn
-                  label={updating ? 'Saving…' : 'Mark as paid'}
+                  label={updating ? 'Saving…' : 'Take payment'}
                   icon={Banknote}
                   disabled={updating}
                   tone="pay"
-                  onClick={askPay}
+                  onClick={onOpenPayment}
                 />
               )}
 

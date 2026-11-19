@@ -1,36 +1,25 @@
-import { getPaymentStats } from '../../lib/dashboardData';
+import { PAYMENT_METHOD_LABELS } from '../../lib/dashboardData';
 import { formatPeso } from '../../lib/dateRanges';
 
-const METHOD_LABEL = { cash: 'Cash', gcash: 'GCash', other: 'Other' };
-
-export default function PaymentSummary({ orders, onSelectUnpaid }) {
-  const stats = getPaymentStats(orders);
-
+export default function PaymentSummary({ stats }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="text-sm font-semibold text-gray-800 mb-3">Payment Summary</h3>
-
-      <div className="flex gap-6 mb-4">
+    <section className="bg-white border border-gray-200 rounded-xl p-4">
+      <h2 className="text-sm font-semibold text-gray-800 mb-3">Payment summary</h2>
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {stats.byMethod.map(({ method, amount }) => (
+          <div key={method}>
+            <dt className="text-xs text-gray-600">{PAYMENT_METHOD_LABELS[method]} collected</dt>
+            <dd className="text-lg font-semibold text-gray-900">{formatPeso(amount)}</dd>
+          </div>
+        ))}
         <div>
-          <p className="text-xs text-gray-400">Paid</p>
-          <p className="text-lg font-semibold text-green-600">{formatPeso(stats.paidAmount)}</p>
+          <dt className="text-xs text-gray-600">Outstanding</dt>
+          <dd className="text-lg font-semibold text-amber-700">{formatPeso(stats.unpaidAmount)}</dd>
+          <dd className="text-xs text-gray-600">
+            {stats.unpaidCount} unpaid {stats.unpaidCount === 1 ? 'order' : 'orders'} opened in this period
+          </dd>
         </div>
-        <button className="text-left" onClick={onSelectUnpaid}>
-          <p className="text-xs text-gray-400">Unpaid</p>
-          <p className="text-lg font-semibold text-red-500">{formatPeso(stats.unpaidAmount)}</p>
-        </button>
-      </div>
-
-      {stats.byMethod.length > 0 && (
-        <div className="space-y-1.5 pt-3 border-t border-gray-100">
-          {stats.byMethod.map((m) => (
-            <div key={m.method} className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">{METHOD_LABEL[m.method] || m.method}</span>
-              <span className="font-medium text-gray-800">{formatPeso(m.amount)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      </dl>
+    </section>
   );
 }

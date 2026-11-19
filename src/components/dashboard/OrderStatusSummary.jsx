@@ -4,7 +4,7 @@ const STATUS = {
     color: 'bg-orange-400',
     text: 'text-orange-600',
   },
-  ready: {
+  done: {
     label: 'Ready',
     color: 'bg-green-500',
     text: 'text-green-600',
@@ -28,7 +28,7 @@ export default function OrderStatusSummary({
       count: pendingCount,
     },
     {
-      key: 'ready',
+      key: 'done',
       count: readyCount,
     },
     {

@@ -1,256 +1,212 @@
-// src/lib/dashboardData.js
-//
-// ASSUMED SCHEMA — adjust table/column names to match your actual Supabase
-// tables, the rest of the file doesn't need to change if you keep the shape:
-//
-//   orders
-//     id, order_number, customer_name, customer_id, created_at (timestamptz),
-//     status          text: 'pending' | 'processing' | 'ready' | 'released' | 'cancelled'
-//     payment_status  text: 'paid' | 'unpaid'
-//     payment_method  text: 'cash' | 'gcash' | 'other'
-//     subtotal, discount, total  numeric
-//     created_by      text (staff name, optional)
-//
-//   order_items   (one row per service or add-on on an order)
-//     id, order_id, item_type text: 'service' | 'addon'
-//     name, quantity, unit_price, line_total  numeric
-//
-// Every dashboard card AND the Excel export both call the functions below,
-// so "dashboard numbers = export numbers" by construction — there is only
-// one place that filters/aggregates orders.
+import { supabase } from './supabase.js';
+import { businessDateKey, formatPeso } from './dateRanges.js';
 
-import { supabase } from './supabase';
+const ORDER_COLUMNS = 'id, order_number, customer_name, created_at, created_by_email, total, payment_status, status, order_items(service_name, quantity, price), order_addons(addon_name, quantity, total)';
+const PAYMENT_COLUMNS = 'id, order_id, amount, method, recorded_at, recorded_by_email, orders(order_number, customer_name)';
+const PAGE_SIZE = 500;
 
-const ACTIVE_PROCESSING_STATUSES = ['pending', 'processing'];
+async function fetchInRange(table, columns, timestamp, start, end, client) {
+  const rows = [];
+  let cursor;
+  for (;;) {
+    let query = client.from(table)
+      .select(columns)
+      .gte(timestamp, start.toISOString())
+      .lt(timestamp, end.toISOString())
+      .order(timestamp, { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE);
 
-/**
- * Fetches every order (with its line items) that falls inside [start, end].
- * This is the one query everything else in this file derives from.
- */
-export async function fetchOrdersInRange(start, end) {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, order_items(*)')
-    .gte('created_at', start.toISOString())
-    .lte('created_at', end.toISOString())
-    .order('created_at', { ascending: false });
+    if (cursor) {
+      query = query.or(`${timestamp}.lt.${cursor[timestamp]},and(${timestamp}.eq.${cursor[timestamp]},id.lt.${cursor.id})`);
+    }
 
-  if (error) throw error;
-  return data || [];
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data?.length) return rows;
+
+    rows.push(...data);
+    cursor = data.at(-1);
+  }
 }
 
-/**
- * Top-of-dashboard KPI numbers for the selected period, plus the same
- * numbers for the prior comparable period so cards can show a trend.
- */
-export async function getKpiSummary({ start, end, comparisonStart, comparisonEnd }) {
-  const [current, previous] = await Promise.all([
-    fetchOrdersInRange(start, end),
-    fetchOrdersInRange(comparisonStart, comparisonEnd),
+export function fetchOrdersInRange(start, end, client = supabase) {
+  return fetchInRange('orders', ORDER_COLUMNS, 'created_at', start, end, client);
+}
+
+export function fetchPaymentsInRange(start, end, client = supabase) {
+  return fetchInRange('order_payments', PAYMENT_COLUMNS, 'recorded_at', start, end, client);
+}
+
+export async function fetchReportData({ start, end }, client = supabase) {
+  const [orders, payments] = await Promise.all([
+    fetchOrdersInRange(start, end, client),
+    fetchPaymentsInRange(start, end, client),
   ]);
+  return { orders, payments };
+}
 
-  const summarize = (orders) => {
-    const notCancelled = orders.filter((o) => o.status !== 'cancelled');
-    const revenue = notCancelled.reduce((sum, o) => sum + Number(o.total || 0), 0);
-    const unpaidOrders = orders.filter((o) => o.payment_status === 'unpaid' && o.status !== 'cancelled');
-    const unpaidAmount = unpaidOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
-    const pending = orders.filter((o) => ACTIVE_PROCESSING_STATUSES.includes(o.status));
-    const ready = orders.filter((o) => o.status === 'ready');
-    const released = orders.filter((o) => o.status === 'released');
-    const cancelled = orders.filter((o) => o.status === 'cancelled');
+const toCents = (amount) => Math.round(Number(amount || 0) * 100);
+const sumAmounts = (rows, amount) => rows.reduce((sum, row) => sum + toCents(amount(row)), 0) / 100;
+const isActive = (order) => order.status !== 'cancelled';
 
-    return {
-      totalOrders: orders.length,
-      revenue,
-      unpaidAmount,
-      unpaidCount: unpaidOrders.length,
-      pendingCount: pending.length,
-      pendingWashing: pending.filter((o) => o.status === 'pending').length,
-      pendingProcessing: pending.filter((o) => o.status === 'processing').length,
-      readyCount: ready.length,
-      releasedCount: released.length,
-      cancelledCount: cancelled.length,
-      avgOrderValue: notCancelled.length ? revenue / notCancelled.length : 0,
-    };
-  };
+export const PAYMENT_METHOD_LABELS = { cash: 'Cash', gcash: 'GCash', other: 'Other' };
+export const ORDER_STATUS_LABELS = { pending: 'Pending', done: 'Ready', released: 'Released', cancelled: 'Voided' };
 
-  const cur = summarize(current);
-  const prev = summarize(previous);
-
+export function getPaymentStats(orders, payments = []) {
+  const unpaid = orders.filter((order) => isActive(order) && !order.payment_status);
   return {
-    ...cur,
-    trend: {
-      revenue: pctChange(cur.revenue, prev.revenue),
-      orders: pctChange(cur.totalOrders, prev.totalOrders),
-    },
-    orders: current, // raw list, reused by other cards for this same period
-  };
-}
-
-function pctChange(cur, prev) {
-  if (!prev) return cur > 0 ? 100 : 0;
-  return Math.round(((cur - prev) / prev) * 1000) / 10;
-}
-
-/** Order counts by status, for the compact "Orders Overview" list. */
-export function getOrdersByStatus(orders) {
-  const statuses = ['pending', 'processing', 'ready', 'released', 'cancelled'];
-  return statuses
-    .map((status) => ({ status, count: orders.filter((o) => o.status === status).length }))
-    .filter((row) => row.count > 0);
-}
-
-/**
- * Revenue grouped by day, for the Revenue chart. `orders` should already be
- * scoped to the selected range. Works for daily/weekly/monthly buckets by
- * changing the bucket key function.
- */
-export function getRevenueSeries(orders, groupBy = 'day') {
-  const notCancelled = orders.filter((o) => o.status !== 'cancelled');
-  const buckets = new Map();
-
-  for (const o of notCancelled) {
-    const d = new Date(o.created_at);
-    let key;
-    if (groupBy === 'day') {
-      key = d.toISOString().slice(0, 10);
-    } else if (groupBy === 'week') {
-      const monday = new Date(d);
-      const day = monday.getDay();
-      monday.setDate(monday.getDate() - ((day + 6) % 7));
-      key = monday.toISOString().slice(0, 10);
-    } else {
-      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    }
-    const existing = buckets.get(key) || { key, revenue: 0, orders: 0 };
-    existing.revenue += Number(o.total || 0);
-    existing.orders += 1;
-    buckets.set(key, existing);
-  }
-
-  return Array.from(buckets.values()).sort((a, b) => (a.key > b.key ? 1 : -1));
-}
-
-/** Ranked list of services by order count + revenue (Popular Services / Revenue by Service). */
-export function getServiceStats(orders) {
-  const map = new Map();
-  for (const o of orders) {
-    if (o.status === 'cancelled') continue;
-    for (const item of o.order_items || []) {
-      if (item.item_type !== 'service') continue;
-      const row = map.get(item.name) || { name: item.name, orders: 0, quantity: 0, revenue: 0 };
-      row.orders += 1;
-      row.quantity += Number(item.quantity || 0);
-      row.revenue += Number(item.line_total || 0);
-      map.set(item.name, row);
-    }
-  }
-  const rows = Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
-  return rows.map((r) => ({ ...r, pctOfRevenue: totalRevenue ? (r.revenue / totalRevenue) * 100 : 0 }));
-}
-
-/** Same shape as getServiceStats but for add-ons (Detergent, Fabric Softener, ...). */
-export function getAddonStats(orders) {
-  const map = new Map();
-  for (const o of orders) {
-    if (o.status === 'cancelled') continue;
-    for (const item of o.order_items || []) {
-      if (item.item_type !== 'addon') continue;
-      const row = map.get(item.name) || { name: item.name, sold: 0, revenue: 0 };
-      row.sold += Number(item.quantity || 0);
-      row.revenue += Number(item.line_total || 0);
-      map.set(item.name, row);
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-}
-
-/** Paid vs unpaid totals, and a breakdown by payment method (Payment Summary). */
-export function getPaymentStats(orders) {
-  const notCancelled = orders.filter((o) => o.status !== 'cancelled');
-  const paid = notCancelled.filter((o) => o.payment_status === 'paid');
-  const unpaid = notCancelled.filter((o) => o.payment_status === 'unpaid');
-
-  const byMethod = new Map();
-  for (const o of paid) {
-    const method = o.payment_method || 'other';
-    byMethod.set(method, (byMethod.get(method) || 0) + Number(o.total || 0));
-  }
-
-  return {
-    paidAmount: paid.reduce((s, o) => s + Number(o.total || 0), 0),
-    unpaidAmount: unpaid.reduce((s, o) => s + Number(o.total || 0), 0),
+    paidAmount: sumAmounts(payments, (payment) => payment.amount),
+    unpaidAmount: sumAmounts(unpaid, (order) => order.total),
     unpaidCount: unpaid.length,
-    byMethod: Array.from(byMethod.entries()).map(([method, amount]) => ({ method, amount })),
+    byMethod: Object.keys(PAYMENT_METHOD_LABELS).map((method) => ({
+      method,
+      amount: sumAmounts(payments.filter((payment) => payment.method === method), (payment) => payment.amount),
+    })),
   };
 }
 
-/**
- * Items that need the owner's attention right now: ready-for-pickup,
- * unpaid, and orders that have been "processing" longer than expected.
- * Only categories that actually have entries are returned.
- */
-export function getNeedsAttention(orders, { delayHours = 24 } = {}) {
-  const now = Date.now();
-  const ready = orders.filter((o) => o.status === 'ready');
-  const unpaid = orders.filter((o) => o.payment_status === 'unpaid' && o.status !== 'cancelled');
-  const delayed = orders.filter((o) => {
-    if (!ACTIVE_PROCESSING_STATUSES.includes(o.status)) return false;
-    const ageHours = (now - new Date(o.created_at).getTime()) / 36e5;
-    return ageHours > delayHours;
-  });
-  const cancelled = orders.filter((o) => o.status === 'cancelled');
+export function summarizeReport(orders, payments) {
+  const active = orders.filter(isActive);
+  const orderValue = sumAmounts(active, (order) => order.total);
+  const statusCounts = Object.fromEntries(getOrdersByStatus(orders).map(({ status, count }) => [status, count]));
+  const collections = getPaymentStats(orders, payments);
 
-  const items = [];
-  if (ready.length) {
-    items.push({
-      key: 'ready',
-      severity: 'positive',
-      title: `${ready.length} order${ready.length === 1 ? '' : 's'} ready for release`,
-      subtitle: 'Customers can pick these up.',
-      count: ready.length,
-    });
-  }
-  if (unpaid.length) {
-    const amount = unpaid.reduce((s, o) => s + Number(o.total || 0), 0);
-    items.push({
-      key: 'unpaid',
-      severity: 'urgent',
-      title: `${unpaid.length} unpaid order${unpaid.length === 1 ? '' : 's'}`,
-      subtitle: `\u20B1${amount.toLocaleString('en-PH')} outstanding.`,
-      count: unpaid.length,
-    });
-  }
-  if (delayed.length) {
-    items.push({
-      key: 'delayed',
-      severity: 'warning',
-      title: `${delayed.length} delayed order${delayed.length === 1 ? '' : 's'}`,
-      subtitle: 'Processing longer than expected.',
-      count: delayed.length,
-    });
-  }
-  if (cancelled.length) {
-    items.push({
-      key: 'cancelled',
-      severity: 'neutral',
-      title: `${cancelled.length} cancelled order${cancelled.length === 1 ? '' : 's'}`,
-      subtitle: 'Review if this needs follow-up.',
-      count: cancelled.length,
-    });
-  }
-  return items;
+  return {
+    totalOrders: orders.length,
+    orderValue,
+    revenue: collections.paidAmount,
+    unpaidAmount: collections.unpaidAmount,
+    unpaidCount: collections.unpaidCount,
+    pendingCount: statusCounts.pending ?? 0,
+    pendingWashing: statusCounts.pending ?? 0,
+    pendingProcessing: 0,
+    readyCount: statusCounts.done ?? 0,
+    releasedCount: statusCounts.released ?? 0,
+    cancelledCount: statusCounts.cancelled ?? 0,
+    avgOrderValue: active.length ? orderValue / active.length : 0,
+    collections,
+  };
 }
 
-/** Order counts by hour of day, for "Busiest Hours". Returns [] if too little data to be meaningful. */
-export function getPeakHours(orders, minOrders = 20) {
-  if (orders.length < minOrders) return [];
-  const buckets = new Array(24).fill(0);
-  for (const o of orders) {
-    buckets[new Date(o.created_at).getHours()] += 1;
+export async function getKpiSummary(range, client = supabase) {
+  const [current, previous] = await Promise.all([
+    fetchReportData(range, client),
+    fetchReportData({ start: range.comparisonStart, end: range.comparisonEnd }, client),
+  ]);
+  const summary = summarizeReport(current.orders, current.payments);
+  const previousSummary = summarizeReport(previous.orders, previous.payments);
+
+  return {
+    ...current,
+    ...summary,
+    trend: {
+      revenue: percentChange(summary.revenue, previousSummary.revenue),
+      orders: percentChange(summary.totalOrders, previousSummary.totalOrders),
+    },
+  };
+}
+
+function percentChange(current, previous) {
+  if (!previous) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+export function getOrdersByStatus(orders) {
+  const counts = new Map();
+  for (const { status } of orders) counts.set(status, (counts.get(status) ?? 0) + 1);
+  return Object.keys(ORDER_STATUS_LABELS)
+    .filter((status) => counts.has(status))
+    .map((status) => ({ status, count: counts.get(status) }));
+}
+
+export function getDailyClose(orders, payments) {
+  const days = new Map();
+  for (const order of orders) {
+    const key = businessDateKey(order.created_at);
+    if (!days.has(key)) days.set(key, { orders: [], payments: [] });
+    days.get(key).orders.push(order);
   }
-  return buckets
-    .map((count, hour) => ({ hour, count }))
-    .filter((b) => b.count > 0);
+  for (const payment of payments) {
+    const key = businessDateKey(payment.recorded_at);
+    if (!days.has(key)) days.set(key, { orders: [], payments: [] });
+    days.get(key).payments.push(payment);
+  }
+  return [...days.keys()].sort().map((day) => {
+    const { orders: dayOrders, payments: dayPayments } = days.get(day);
+    return { day, ...summarizeReport(dayOrders, dayPayments) };
+  });
+}
+
+export function getRevenueSeries(payments, groupBy = 'day') {
+  const groups = new Map();
+  for (const payment of payments) {
+    const day = businessDateKey(payment.recorded_at);
+    let key = day;
+    if (groupBy === 'month') key = day.slice(0, 7);
+    if (groupBy === 'week') {
+      const date = new Date(`${day}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+      key = date.toISOString().slice(0, 10);
+    }
+    const group = groups.get(key) ?? { cents: 0, payments: 0 };
+    group.cents += toCents(payment.amount);
+    group.payments += 1;
+    groups.set(key, group);
+  }
+  return [...groups.keys()].sort().map((key) => {
+    const group = groups.get(key);
+    return { key, revenue: group.cents / 100, payments: group.payments };
+  });
+}
+
+export function getServiceStats(orders) {
+  const stats = new Map();
+  for (const order of orders.filter(isActive)) {
+    for (const item of order.order_items ?? []) {
+      const name = item.service_name;
+      const row = stats.get(name) ?? { name, orders: 0, quantity: 0, cents: 0 };
+      row.orders += 1;
+      row.quantity += Number(item.quantity);
+      row.cents += toCents(item.price) * Number(item.quantity);
+      stats.set(name, row);
+    }
+  }
+  const rows = [...stats.values()].sort((a, b) => b.cents - a.cents);
+  const total = rows.reduce((sum, row) => sum + row.cents, 0);
+  return rows.map(({ cents, ...row }) => ({
+    ...row, revenue: cents / 100, pctOfRevenue: total ? (cents / total) * 100 : 0,
+  }));
+}
+
+export function getAddonStats(orders) {
+  const stats = new Map();
+  for (const order of orders.filter(isActive)) {
+    for (const item of order.order_addons ?? []) {
+      const name = item.addon_name ?? 'Add-on';
+      const row = stats.get(name) ?? { name, sold: 0, cents: 0 };
+      row.sold += Number(item.quantity);
+      row.cents += toCents(item.total);
+      stats.set(name, row);
+    }
+  }
+  return [...stats.values()]
+    .sort((a, b) => b.cents - a.cents)
+    .map(({ cents, ...row }) => ({ ...row, revenue: cents / 100 }));
+}
+
+export function getNeedsAttention(orders, { delayHours = 24 } = {}) {
+  const ready = orders.filter((order) => order.status === 'done');
+  const { unpaidCount, unpaidAmount } = getPaymentStats(orders);
+  const delayed = orders.filter((order) => (
+    order.status === 'pending' && Date.now() - new Date(order.created_at) > delayHours * 3600000
+  ));
+  const cancelled = orders.filter((order) => order.status === 'cancelled');
+
+  return [
+    { key: 'done', severity: 'positive', title: 'Ready for pickup', count: ready.length },
+    { key: 'unpaid', severity: 'urgent', title: 'Unpaid orders', subtitle: `${formatPeso(unpaidAmount)} outstanding`, count: unpaidCount },
+    { key: 'delayed', severity: 'warning', title: 'Delayed orders', count: delayed.length },
+    { key: 'cancelled', severity: 'neutral', title: 'Voided orders', count: cancelled.length },
+  ].filter(({ count }) => count);
 }

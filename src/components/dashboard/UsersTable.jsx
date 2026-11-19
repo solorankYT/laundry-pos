@@ -1,44 +1,50 @@
-
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
 
 export default function UsersTable() {
-  const [users, setUsers] = useState([]);
+  const [result, setResult] = useState(null)
 
   useEffect(() => {
-    async function fetchUsers() {
-      const { data } = await supabase.from('Users').select('*');
-      setUsers(data || []);
+    const controller = new AbortController()
+
+    async function fetchStaff() {
+      const response = await supabase
+        .from('staff_profiles')
+        .select('user_id, display_name, role, active')
+        .order('display_name')
+        .abortSignal(controller.signal)
+
+      if (!controller.signal.aborted) setResult(response)
     }
-    fetchUsers();
-  }, []);
+
+    fetchStaff()
+    return () => controller.abort()
+  }, [])
+
+  if (!result) return <p role="status" className="text-sm text-stone-600">Loading staff…</p>
+  if (result.error) return <p role="alert" className="text-sm text-rose-700">Could not load staff. Refresh to try again.</p>
+  if (!result.data.length) return <p className="text-sm text-stone-600">No staff accounts are available.</p>
 
   return (
-    <div className="bg-white p-4 rounded shadow overflow-x-auto">
-      <h2 className="text-lg font-bold mb-4">Users</h2>
-      <table className="w-full text-left border-collapse">
-        <thead>
+    <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-stone-200 bg-stone-50 text-stone-600">
           <tr>
-            <th className="border-b p-2">Name</th>
-            <th className="border-b p-2">Email</th>
-            <th className="border-b p-2">Role</th>
-            <th className="border-b p-2">Actions</th>
+            <th scope="col" className="p-3">Name</th>
+            <th scope="col" className="p-3">Role</th>
+            <th scope="col" className="p-3">Status</th>
           </tr>
         </thead>
-        <tbody>
-          {users.map(user => (
-            <tr key={user.id} className="hover:bg-gray-50">
-              <td className="p-2">{user.name}</td>
-              <td className="p-2">{user.email}</td>
-              <td className="p-2">{user.role}</td>
-              <td className="p-2">
-                <button className="text-blue-500 hover:underline mr-2">Edit</button>
-                <button className="text-red-500 hover:underline">Delete</button>
-              </td>
+        <tbody className="divide-y divide-stone-100">
+          {result.data.map(staff => (
+            <tr key={staff.user_id}>
+              <td className="p-3 font-medium">{staff.display_name}</td>
+              <td className="p-3">{staff.role === 'manager' ? 'Manager' : 'Cashier'}</td>
+              <td className="p-3">{staff.active ? 'Active' : 'Inactive'}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  );
+  )
 }
